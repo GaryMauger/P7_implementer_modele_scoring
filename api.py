@@ -1,18 +1,36 @@
 import mlflow
 import mlflow.lightgbm
 from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import Union
+from utils import predict, clients_id_list
 
-# Initialiser l'application FastAPI
+# Initialiser l'application FastAPI :
+# Cela crée une instance de l'application **FastAPI** appelée app, qui servira de point d'entrée pour définir et gérer les différentes routes (endpoints) de notre API.
 app = FastAPI()
 
 # Spécifier le chemin du modèle
-model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/404984096885784552/4deefe68adea4a65a11fb225abed04a6/artifacts/model"
+model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/950890628191069861/186b5498eff44081a9789e2d11e211ed/artifacts/model"
 
 # Charger le modèle à partir du chemin local
-model = mlflow.lightgbm.load_model(model_path)
+model = mlflow.xgboost.load_model(model_path)
+
+# Définition de la classe :
+# Cette classe est utilisée pour modéliser les objets de requête que l'API peut recevoir, et FastAPI utilisera automatiquement cette définition pour valider les données reçues.
+class requestObject(BaseModel):
+    client_id: Union[float, None] = None
+    feat_number : Union[int, None] = None
+    feat_name : Union[str, None] = None
 
 @app.get("/")
 def great():
     return {"message": "Modèle chargé avec succès"}
 
+@app.post('/predict')
+async def predict_credit(data: requestObject):
+    proba, prediction = predict(data.client_id)
+    return {"result": prediction, "proba": proba}
 
+@app.post('/get_clients_list')
+async def get_clients_list():
+    return {"clients_list": clients_id_list()}
