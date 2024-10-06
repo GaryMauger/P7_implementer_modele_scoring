@@ -1,9 +1,19 @@
-# Ignorer tout par défaut
-*
+# Ignorer les dossiers de cache
+__pycache__/
+.ipynb_checkpoints/
 
-# Ne pas ignorer les fichiers .ipynb et api.py
-!*.ipynb
-!api.py
+# Ignorer les configurations d'IDE
+.vscode/
+.idea/
 
-# Ne pas ignorer le dossier .gitignore lui-même
-!.gitignore
+best_model_xgb/
+
+*.csv
+*.pkl
+
+# Ignorer les fichiers de suivi MLFlow
+mlruns/
+mlartifacts/
+
+# Ignorer les fichiers d'artifacts CatBoost
+catboost_info/
