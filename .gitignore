@@ -1,0 +1,9 @@
+# Ignorer tout par défaut
+*
+
+# Ne pas ignorer les fichiers .ipynb et api.py
+!*.ipynb
+!api.py
+
+# Ne pas ignorer le dossier .gitignore lui-même
+!.gitignore
