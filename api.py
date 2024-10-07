@@ -3,7 +3,7 @@ import mlflow.lightgbm
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Union
-from utils import predict, clients_id_list
+from utils import *
 
 # Initialiser l'application FastAPI :
 # Cela crée une instance de l'application **FastAPI** appelée app, qui servira de point d'entrée pour définir et gérer les différentes routes (endpoints) de notre API.
@@ -34,3 +34,13 @@ async def predict_credit(data: requestObject):
 @app.post('/get_clients_list')
 async def get_clients_list():
     return {"clients_list": clients_id_list()}
+
+# Définition du endpoint pour récupérer les informations sur un client
+@app.post('/get_client_data')
+async def get_client_data(data: requestObject):
+    return {"client_data" : client_info(data.client_id)}
+
+# Définition du endpoint pour recupérer les informations générales sur le crédit demandé
+@app.post('/get_credit_info')
+async def get_credit_info(data: requestObject):
+    return {"credit_info" : credit_info(data.client_id)}

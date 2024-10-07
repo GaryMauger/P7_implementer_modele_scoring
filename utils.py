@@ -1,27 +1,101 @@
 import pickle
 import mlflow
+import pandas as pd
+import random
 
 # Spécifier le chemin du modèle
 model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/950890628191069861/186b5498eff44081a9789e2d11e211ed/artifacts/model"
+data_path = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/"
 
 # Charger le modèle à partir du chemin local
 model = mlflow.xgboost.load_model(model_path)
 
+# Les transformations appliquées aux données d'entrée
+def transform(df):
+    # return transform_data(df) # L'éxécution de la fonction de transformation des données étant longue (> 10 minutes), nous chargeons directement les données transformées depuis un fichier csv.
+    return pd.read_csv(data_path + "df_data_6.csv")
+
+# Chargement des données des clients depuis un fichier CSV
+prod_data = pd.read_csv(data_path + "application_test.csv") # base de clients en "production", nouveaux clients
+df_data_6 = transform(prod_data) # Transformation des données clients pour utilisation du modèle
+
+df_application_test = pd.read_csv(data_path + 'application_test.csv')
+
+clients_data = df_data_6[df_data_6['SK_ID_CURR'].isin(df_application_test['SK_ID_CURR'])]
+
+clients_data.info()
+
+
+feats = [f for f in clients_data.columns if f not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV','index','Unnamed: 0']]
+
 # Fonction de prédiction
 def predict(client_id):
     # Simulation de la récupération des données client et prédiction
-    client_data = fetch_client_data(client_id)  # À implémenter : récupérer les données du client
-    proba = model.predict_proba([client_data])[0][1]  # Prédiction de la probabilité
-    prediction = model.predict([client_data])[0]  # Prédiction de la classe
+    selected_client = clients_data.loc[clients_data['SK_ID_CURR']==client_id]
+    proba = model.predict_proba(selected_client[feats]).tolist()[0][0]
+    prediction = model.predict(selected_client[feats]).tolist()[0]
     return proba, prediction
 
-# Fonction pour obtenir la liste des ID clients
+# Fonction pour obtenir une liste de 10 ID clients aléatoires
 def clients_id_list():
-    # Exemple : Récupérer la liste d'IDs depuis une base de données ou un fichier
-    client_ids = [1001, 1002, 1003, 1004, 1005]  # Ceci est un exemple
-    return client_ids
+    return random.sample(clients_data['SK_ID_CURR'].tolist(), 10)
 
-# Fonction pour récupérer les données du client à partir de l'ID
-def fetch_client_data(client_id):
-    # Exemple : Implémentez la logique pour récupérer les données du client depuis une base de données
-    return [1.0, 2.0, 3.0]  # Données fictives pour l'exemple
+# Retourne les caractéristiques du crédit demandé par le client
+def credit_info(client_id):
+    credit_info_columns=["NAME_CONTRACT_TYPE","AMT_CREDIT","AMT_ANNUITY","AMT_GOODS_PRICE"]
+    credit_info=clients_data.loc[clients_data['SK_ID_CURR']==client_id,credit_info_columns].T # informations crédit pour le client selectionné
+    return credit_info
+
+# Retourne les informations personnelles sur le client
+def client_info(client_id):
+    client_info_columns = [
+                 "CODE_GENDER",
+                 "CNT_CHILDREN",
+                 "FLAG_OWN_CAR",
+                 "FLAG_OWN_REALTY",
+                 "NAME_FAMILY_STATUS",
+                 "NAME_HOUSING_TYPE",
+                 "NAME_EDUCATION_TYPE",
+                 "NAME_INCOME_TYPE",
+                 "AMT_INCOME_TOTAL"
+                 ]    
+    client_info=clients_data.loc[clients_data['SK_ID_CURR']==client_id,client_info_columns].T # informations client pour le client selectionné
+    client_info= client_info.fillna('N/A')
+    return client_info
+
+
+# Exemple d'utilisation des fonctions
+
+# Charger le modèle et les données
+print("Liste de 10 clients aléatoires :", clients_id_list())
+
+# Choisir un client au hasard parmi la liste
+client_id = clients_id_list()[0]
+print("Client sélectionné :", client_id)
+
+# Tester la prédiction pour ce client
+proba, prediction = predict(client_id)
+print("Prédiction pour le client :", prediction)
+print("Probabilité associée :", proba)
+
+# Récupérer les informations crédit et client
+credit_info_client = credit_info(client_id)
+print("Informations crédit pour le client :\n", credit_info_client)
+
+client_info_client = client_info(client_id)
+print("Informations personnelles pour le client :\n", client_info_client)
+
+client_info_columns = [
+                 "CODE_GENDER",
+                 "CNT_CHILDREN",
+                 "FLAG_OWN_CAR",
+                 "FLAG_OWN_REALTY",
+                 "NAME_FAMILY_STATUS",
+                 "NAME_HOUSING_TYPE",
+                 "NAME_EDUCATION_TYPE",
+                 "NAME_INCOME_TYPE",
+                 "OCCUPATION_TYPE",
+                 "AMT_INCOME_TOTAL"
+                 ]   
+
+print(prod_data)
