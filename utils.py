@@ -25,7 +25,7 @@ df_application_test = pd.read_csv(data_path + 'application_test.csv')
 
 clients_data = df_clients[df_clients['SK_ID_CURR'].isin(df_application_test['SK_ID_CURR'])]
 
-clients_data.info()
+#clients_data.info()
 
 
 feats = [f for f in clients_data.columns if f not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV','index','Unnamed: 0']]
@@ -65,25 +65,3 @@ def client_info(client_id):
     client_info=df_application_test.loc[df_application_test['SK_ID_CURR']==client_id,client_info_columns].T # informations client pour le client selectionné
     client_info= client_info.fillna('N/A')
     return client_info
-
-
-# Exemple d'utilisation des fonctions
-
-# Charger le modèle et les données
-print("Liste de 10 clients aléatoires :", clients_id_list())
-
-# Choisir un client au hasard parmi la liste
-client_id = clients_id_list()[0]
-print("Client sélectionné :", client_id)
-
-# Tester la prédiction pour ce client
-proba, prediction = predict(client_id)
-print("Prédiction pour le client :", prediction)
-print("Probabilité associée :", proba)
-
-# Récupérer les informations crédit et client
-credit_info_client = credit_info(client_id)
-print("Informations crédit pour le client :\n", credit_info_client)
-
-client_info_client = client_info(client_id)
-print("Informations personnelles pour le client :\n", client_info_client)
