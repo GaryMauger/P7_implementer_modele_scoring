@@ -2,9 +2,10 @@ import pickle
 import mlflow
 import pandas as pd
 import random
+import pipeline_features_eng
 
 # Spécifier le chemin du modèle
-model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/950890628191069861/186b5498eff44081a9789e2d11e211ed/artifacts/model"
+model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/950890628191069861/e31f1e6f9ec0467f87578900af3c4d68/artifacts/model"
 data_path = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/"
 
 # Charger le modèle à partir du chemin local
@@ -16,12 +17,13 @@ def transform(df):
     return pd.read_csv(data_path + "df_data_6.csv")
 
 # Chargement des données des clients depuis un fichier CSV
-prod_data = pd.read_csv(data_path + "application_test.csv") # base de clients en "production", nouveaux clients
-df_data_6 = transform(prod_data) # Transformation des données clients pour utilisation du modèle
+#prod_data = pd.read_csv(data_path + "application_test.csv") # base de clients en "production", nouveaux clients
+df_clients = pipeline_features_eng.execute_pipeline()
+#df_data_6 = transform(prod_data) # Transformation des données clients pour utilisation du modèle
 
 df_application_test = pd.read_csv(data_path + 'application_test.csv')
 
-clients_data = df_data_6[df_data_6['SK_ID_CURR'].isin(df_application_test['SK_ID_CURR'])]
+clients_data = df_clients[df_clients['SK_ID_CURR'].isin(df_application_test['SK_ID_CURR'])]
 
 clients_data.info()
 
@@ -57,9 +59,10 @@ def client_info(client_id):
                  "NAME_HOUSING_TYPE",
                  "NAME_EDUCATION_TYPE",
                  "NAME_INCOME_TYPE",
+                 "OCCUPATION_TYPE",
                  "AMT_INCOME_TOTAL"
                  ]    
-    client_info=clients_data.loc[clients_data['SK_ID_CURR']==client_id,client_info_columns].T # informations client pour le client selectionné
+    client_info=df_application_test.loc[df_application_test['SK_ID_CURR']==client_id,client_info_columns].T # informations client pour le client selectionné
     client_info= client_info.fillna('N/A')
     return client_info
 
@@ -84,18 +87,3 @@ print("Informations crédit pour le client :\n", credit_info_client)
 
 client_info_client = client_info(client_id)
 print("Informations personnelles pour le client :\n", client_info_client)
-
-client_info_columns = [
-                 "CODE_GENDER",
-                 "CNT_CHILDREN",
-                 "FLAG_OWN_CAR",
-                 "FLAG_OWN_REALTY",
-                 "NAME_FAMILY_STATUS",
-                 "NAME_HOUSING_TYPE",
-                 "NAME_EDUCATION_TYPE",
-                 "NAME_INCOME_TYPE",
-                 "OCCUPATION_TYPE",
-                 "AMT_INCOME_TOTAL"
-                 ]   
-
-print(prod_data)
