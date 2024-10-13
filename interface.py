@@ -75,6 +75,25 @@ def get_all_features():
     else:
         st.error("Impossible de récupérer la liste des colonnes.")
         return []
+    
+
+import base64
+
+def get_shap_waterfall_chart(client_id, feature_count):
+    """Récupère le graphique SHAP en waterfall depuis l'API pour le client spécifié."""
+    # Préparez les données pour l'API
+    response = requests.post(
+        f"{API_URL}/get_shap_waterfall_chart",
+        json={"client_id": client_id, "feature_count": feature_count}
+    )
+    
+    if response.status_code == 200:
+        # Le résultat est censé être encodé en base64 (comme une image)
+        return response.json().get("shap_chart")
+    else:
+        st.error("Erreur lors de la récupération du graphique SHAP.")
+        return None
+
 
 
 # ---------------------------------------- Interface Streamlit ---------------------------------------- #
@@ -107,7 +126,7 @@ with col1:
 
     client_id_input = st.text_input("Entrez le numéro du client souhaité :")
 
-    if st.button("Valider"):
+    if st.button("Afficher la prédiction"):
         if client_id_input:
             client_id_input = int(client_id_input)  # Convertir l'input en entier
             # Vérifier si le client existe dans la liste complète
@@ -166,6 +185,23 @@ with col2:
             st.subheader("Informations de crédit")
             with st.expander("Détails du crédit"):
                 st.write(st.session_state.credit_info)
+                
+        if st.checkbox("**Afficher l'explication de la prédiction**"):
+            # Sélection par l'utilisateur du nombre de features à afficher
+            feat_number = st.slider("* Sélectionner le nombre de paramètres souhaité pour expliquer la prédiction", 1, 30, 10)
+
+            base64_image = get_shap_waterfall_chart(client_id_input, feat_number)
+    
+            if base64_image:
+                try:
+                    # Décoder l'image en base64 et l'afficher
+                    image = base64.b64decode(base64_image)
+                    st.image(image, use_column_width=True)
+                except Exception as e:
+                    st.error(f"Erreur lors de l'affichage du graphique SHAP : {e}")
+            else:
+                st.error("Impossible de charger le graphique SHAP.")
+
 
 
 

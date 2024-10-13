@@ -3,7 +3,7 @@
 
 import mlflow
 import mlflow.lightgbm
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Union
@@ -32,8 +32,19 @@ def great():
 
 @app.post('/predict')
 async def predict_credit(data: requestObject):
-    proba, prediction = predict(data.client_id)
-    return {"result": prediction, "proba": proba}
+    proba, prediction, features = predict(data.client_id)
+    
+    # Convertir numpy types en types Python natifs
+    proba = float(proba)  # Conversion en float pour la sérialisation JSON
+    prediction = int(prediction)  # Conversion en int pour la sérialisation JSON
+    
+    return {
+        "result": prediction,
+        "proba": proba,
+        "features": features.to_dict()  # Assurez-vous que features soit sous un format sérialisable
+    }
+
+
 
 class ClientResponse(BaseModel):
     clients_list: list
@@ -56,7 +67,6 @@ def get_column_description(column_name: str):
     return {"column_description": description_text}
 
 
-
 # Définition du endpoint pour récupérer les informations sur un client
 @app.post('/get_client_data')
 async def get_client_data(data: requestObject):
@@ -71,3 +81,39 @@ async def get_credit_info(data: requestObject):
 def get_all_features_endpoint():
     columns = get_all_features()
     return {"columns": columns}
+
+
+def encode_image_to_base64(fig):
+    """Encode une figure Matplotlib en base64."""
+    buffer = BytesIO()
+    fig.savefig(buffer, format='png', bbox_inches='tight')
+    buffer.seek(0)
+    image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    buffer.close()
+    return f"data:image/png;base64,{image_base64}"
+
+
+@app.post("/get_shap_waterfall_chart")
+async def get_shap_waterfall_chart(client_id: float, feature_count: int = 10):
+    # Utilisez la fonction predict pour obtenir les caractéristiques et la prédiction
+    proba, prediction, selected_client = predict(client_id)
+    
+    # Vérifiez que 'selected_client' est bien formé pour SHAP
+    print(f"Shape de selected_client : {selected_client.shape}")
+    print(f"Colonnes de selected_client : {selected_client.columns.tolist()}")
+
+    # Utiliser SHAP TreeExplainer pour le modèle
+    explainer = shap.TreeExplainer(model)
+    
+    # Calculer les valeurs SHAP pour les données du client
+    shap_values = explainer.shap_values(selected_client)
+
+    # Créer le graphique waterfall
+    shap.waterfall_plot(shap_values[0], max_display=feature_count)
+
+    # Convertir le graphique en base64 pour l'affichage
+    image_base64 = shap.waterfall_plot(shap_values[0], max_display=feature_count, show=False)
+    
+    return {"shap_chart": image_base64, "probability": proba, "prediction": prediction}
+
+#print(df_clients.head())

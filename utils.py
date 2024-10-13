@@ -1,8 +1,13 @@
 import pickle
 import mlflow
 import pandas as pd
+import shap
+import io
+import base64
+import matplotlib.pyplot as plt
 import random
 import pipeline_features_eng
+from io import BytesIO
 
 
 # ---------------------------------------- Configuration des chemins ---------------------------------------- #
@@ -24,9 +29,9 @@ column_description = pd.read_csv(data_path + "Projet+Mise+en+prod+-+home-credit-
 # ---------------------------------------- Transformation des données ---------------------------------------- #
 
 # Les transformations appliquées aux données d'entrée
-def transform(df):
+#def transform(df):
     # return transform_data(df) # L'éxécution de la fonction de transformation des données étant longue (> 10 minutes), nous chargeons directement les données transformées depuis un fichier csv.
-    return pd.read_csv(data_path + "df_data_6.csv")
+#    return pd.read_csv(data_path + "df_data_6.csv")
 
 
 # ---------------------------------------- Chargement des données clients ---------------------------------------- #
@@ -39,6 +44,10 @@ df_clients = pipeline_features_eng.execute_pipeline()
 df_application_test = pd.read_csv(data_path + 'application_test.csv')
 
 clients_data = df_clients[df_clients['SK_ID_CURR'].isin(df_application_test['SK_ID_CURR'])]
+print(clients_data.head())
+print(df_clients.head())
+print(df_application_test.head())
+
 
 #clients_data.info()
 
@@ -120,9 +129,78 @@ def client_info(client_id):
 def predict(client_id):
     """
     Effectue la prédiction du score de crédit pour un client donné.
-    Retourne la probabilité et la classe prédite (0 ou 1).
+    Retourne la probabilité, la classe prédite (0 ou 1) et les features utilisées.
     """
     selected_client = clients_data.loc[clients_data['SK_ID_CURR'] == client_id]
-    proba = model.predict_proba(selected_client[feats]).tolist()[0][0]
-    prediction = model.predict(selected_client[feats]).tolist()[0]
-    return proba, prediction
+    
+    # Assurez-vous que 'selected_client' contient bien un client
+    if selected_client.empty:
+        raise ValueError(f"Aucun client trouvé avec SK_ID_CURR = {client_id}")
+    
+    proba = model.predict_proba(selected_client[feats])[0][1]  # Probabilité de la classe positive
+    prediction = model.predict(selected_client[feats])[0]
+    
+    return proba, prediction, selected_client[feats]
+
+
+
+
+def shap_waterfall_chart(selected_client, model, feat_number=10):
+    """
+    Génère un graphique waterfall SHAP pour un client spécifique.
+
+    Args:
+        selected_client (pd.DataFrame): Les features du client sélectionné.
+        model: Le modèle entraîné.
+        feat_number (int): Nombre de features à afficher dans le graphique.
+
+    Returns:
+        str: L'image du graphique SHAP encodée en base64.
+    """
+    # Vérifier que les données du client ne contiennent pas de colonne TARGET ou SK_ID_CURR
+    selected_client = selected_client.drop(columns=['TARGET', 'SK_ID_CURR'], errors='ignore')
+    
+    # Utiliser SHAP TreeExplainer pour le modèle
+    explainer = shap.TreeExplainer(model)
+    
+    # Calculer les valeurs SHAP pour les données du client
+    shap_values = explainer.shap_values(selected_client)
+    
+    # Pour les modèles de classification binaire, shap_values est une liste
+    if isinstance(shap_values, list):
+        shap_values = shap_values[1]  # Classe positive
+    
+    # Générer le graphique waterfall SHAP
+    shap_plot = shap.plots.waterfall(shap.Explanation(values=shap_values[0], 
+                                                     base_values=explainer.expected_value[1], 
+                                                     data=selected_client.iloc[0], 
+                                                     feature_names=selected_client.columns), 
+                                     max_display=feat_number, show=False)
+
+    return encode_image_to_base64(shap_plot)
+
+
+
+def encode_image_to_base64(fig):
+    """Encode une figure Matplotlib en base64.
+
+    Args:
+        fig: La figure Matplotlib à encoder.
+
+    Returns:
+        str: La chaîne encodée en base64 représentant l'image.
+    """
+    # Créer un objet BytesIO pour capturer l'image
+    buffer = BytesIO()
+    
+    # Sauvegarder la figure dans le buffer
+    fig.savefig(buffer, format='png', bbox_inches='tight')
+    buffer.seek(0)  # Remettre le pointeur au début du buffer
+    
+    # Encoder le contenu du buffer en base64
+    image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    
+    # Fermer le buffer
+    buffer.close()
+    
+    return f"data:image/png;base64,{image_base64}"
