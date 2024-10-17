@@ -14,7 +14,7 @@ from utils import *
 app = FastAPI()
 
 # Spécifier le chemin du modèle
-model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/950890628191069861/186b5498eff44081a9789e2d11e211ed/artifacts/model"
+model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/535513794895831126/144f60891d2140538a6daad907da28a3/artifacts/model"
 
 # Charger le modèle à partir du chemin local
 model = mlflow.xgboost.load_model(model_path)
@@ -25,29 +25,17 @@ class requestObject(BaseModel):
     client_id: Union[float, None] = None
     feat_number : Union[int, None] = None
     feat_name : Union[str, None] = None
+    seuil_nom: str = "faible"  # Valeur par défaut pour le seuil
+
+class ClientResponse(BaseModel):
+    clients_list: list
+
 
 @app.get("/")
 def great():
     return {"message": "Modèle chargé avec succès"}
 
-@app.post('/predict')
-async def predict_credit(data: requestObject):
-    proba, prediction, features = predict(data.client_id)
-    
-    # Convertir numpy types en types Python natifs
-    proba = float(proba)  # Conversion en float pour la sérialisation JSON
-    prediction = int(prediction)  # Conversion en int pour la sérialisation JSON
-    
-    return {
-        "result": prediction,
-        "proba": proba,
-        "features": features.to_dict()  # Assurez-vous que features soit sous un format sérialisable
-    }
 
-
-
-class ClientResponse(BaseModel):
-    clients_list: list
 
 @app.post('/get_clients_list', response_model=ClientResponse)
 async def get_clients_list():
@@ -83,6 +71,25 @@ def get_all_features_endpoint():
     return {"columns": columns}
 
 
+@app.post('/predict')
+async def predict_credit(data: requestObject):
+    # Effectuer la prédiction
+    proba, prediction, features, seuil_valeur, seuil_nom_affiche = predict(data.client_id, data.seuil_nom)
+    
+    # Convertir les types NumPy en types Python natifs pour la sérialisation JSON
+    proba = float(proba)  # Conversion en float pour la sérialisation JSON
+    prediction = int(prediction)  # Conversion en int pour la sérialisation JSON
+    
+    # Retourner les résultats
+    return {
+        "result": prediction,
+        "proba": proba,
+        "features": features.to_dict(),  # Assurez-vous que features soit sous un format sérialisable
+        "threshold_value": seuil_valeur,
+        "threshold_name": seuil_nom_affiche
+    }
+
+
 def encode_image_to_base64(fig):
     """Encode une figure Matplotlib en base64."""
     buffer = BytesIO()
@@ -95,25 +102,31 @@ def encode_image_to_base64(fig):
 
 @app.post("/get_shap_waterfall_chart")
 async def get_shap_waterfall_chart(client_id: float, feature_count: int = 10):
-    # Utilisez la fonction predict pour obtenir les caractéristiques et la prédiction
-    proba, prediction, selected_client = predict(client_id)
-    
-    # Vérifiez que 'selected_client' est bien formé pour SHAP
-    print(f"Shape de selected_client : {selected_client.shape}")
-    print(f"Colonnes de selected_client : {selected_client.columns.tolist()}")
+    # Utilisez la fonction predict pour obtenir les valeurs
+    try:
+        proba, prediction, selected_client, seuil_valeur, seuil_nom_affiche = predict(client_id)
+        
+        # Convertir proba et prediction en types natifs Python
+        proba = float(proba)
+        prediction = float(prediction)
 
-    # Utiliser SHAP TreeExplainer pour le modèle
-    explainer = shap.TreeExplainer(model)
-    
-    # Calculer les valeurs SHAP pour les données du client
-    shap_values = explainer.shap_values(selected_client)
+        # Vérifiez que 'selected_client' est bien formé pour SHAP
+        print(f"Shape de selected_client : {selected_client.shape}")
+        print(f"Colonnes de selected_client : {selected_client.columns.tolist()}")
 
-    # Créer le graphique waterfall
-    shap.waterfall_plot(shap_values[0], max_display=feature_count)
+        # Créer le graphique waterfall en utilisant la fonction définie dans utils
+        image_base64 = shap_waterfall_chart(selected_client, model, feat_number=feature_count)
 
-    # Convertir le graphique en base64 pour l'affichage
-    image_base64 = shap.waterfall_plot(shap_values[0], max_display=feature_count, show=False)
-    
-    return {"shap_chart": image_base64, "probability": proba, "prediction": prediction}
+        # Retourner les résultats
+        return {
+            "shap_chart": image_base64,
+            "probability": proba,
+            "prediction": prediction,
+            "seuil_valeur": seuil_valeur,
+            "seuil_nom_affiche": seuil_nom_affiche
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Une erreur est survenue lors de la génération du graphique SHAP.")
 
-#print(df_clients.head())

@@ -8,13 +8,15 @@ import matplotlib.pyplot as plt
 import random
 import pipeline_features_eng
 from io import BytesIO
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 
 # ---------------------------------------- Configuration des chemins ---------------------------------------- #
 
 # Spécifier le chemin du modèle
-model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/950890628191069861/e31f1e6f9ec0467f87578900af3c4d68/artifacts/model"
+model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/535513794895831126/144f60891d2140538a6daad907da28a3/artifacts/model"
 data_path = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/"
+data_path_test = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/"
 
 # ---------------------------------------- Chargement du modèle et des données ---------------------------------------- #
 
@@ -37,21 +39,30 @@ column_description = pd.read_csv(data_path + "Projet+Mise+en+prod+-+home-credit-
 # ---------------------------------------- Chargement des données clients ---------------------------------------- #
 
 # Chargement des données des clients depuis un fichier CSV
-#prod_data = pd.read_csv(data_path + "application_test.csv") # base de clients en "production", nouveaux clients
 df_clients = pipeline_features_eng.execute_pipeline()
-#df_data_6 = transform(prod_data) # Transformation des données clients pour utilisation du modèle
+df_application_test = pd.read_csv(data_path_test + 'application_test.csv')
 
-df_application_test = pd.read_csv(data_path + 'application_test.csv')
-
+# Filtrer les clients selon SK_ID_CURR
 clients_data = df_clients[df_clients['SK_ID_CURR'].isin(df_application_test['SK_ID_CURR'])]
-print(clients_data.head())
-print(df_clients.head())
-print(df_application_test.head())
+
+# Créer une instance de MinMaxScaler
+scaler = MinMaxScaler(feature_range=(0, 1))
+
+# Colonnes à exclure de la mise à l'échelle
+exclude_cols = ['SK_ID_CURR', 'TARGET']
+
+# Sélectionner les colonnes numériques à scaler tout en excluant les colonnes spécifiées
+columns_to_scale = clients_data.select_dtypes(include=['float64', 'int64']).columns.difference(exclude_cols)
+
+# Appliquer le scaler uniquement sur les colonnes sélectionnées
+clients_data_scaled = clients_data.copy()  # Crée une copie pour garder df_clients propre
+clients_data_scaled[columns_to_scale] = scaler.fit_transform(clients_data[columns_to_scale])
 
 
 #clients_data.info()
 
-feats = [f for f in clients_data.columns if f not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV','index','Unnamed: 0']]
+#feats = [f for f in clients_data.columns if f not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV','index','Unnamed: 0']]
+feats = [f for f in clients_data.columns if f not in ['TARGET','SK_ID_CURR']]
 
 
 # ---------------------------------------- Fonctions de traitements des données ---------------------------------------- #
@@ -62,7 +73,6 @@ def get_all_features():
     unique_features = list(set(all_features))  # Supprime les doublons
     unique_features.sort()  # Trie par ordre alphabétique
     return unique_features
-
 
 def description(column_name):
     """
@@ -84,6 +94,7 @@ def description(column_name):
     
     except Exception as e:
         return f"Erreur lors de la récupération de la description : {e}"
+
 
 
 def get_all_clients():
@@ -126,36 +137,54 @@ def client_info(client_id):
 
 # ---------------------------------------- Fonctions de prédiction ---------------------------------------- #
 
-def predict(client_id):
+# Définition des seuils avec leurs noms associés du business score
+thresholds = {
+    "sans": {"valeur": 0.05, "nom": "Sans risque"},
+    "faible": {"valeur": 0.17, "nom": "Faible coût"},
+    "modere": {"valeur": 0.50, "nom": "Coût modéré"},
+    "eleve": {"valeur": 0.28, "nom": "Coût élevé"}
+}
+
+
+def predict(client_id, seuil_nom="faible"):
     """
-    Effectue la prédiction du score de crédit pour un client donné.
-    Retourne la probabilité, la classe prédite (0 ou 1) et les features utilisées.
+    Effectue la prédiction du score de crédit pour un client donné en utilisant le seuil spécifié.
+    Retourne la probabilité, la classe prédite (0 ou 1), les features utilisées et le seuil.
     """
-    selected_client = clients_data.loc[clients_data['SK_ID_CURR'] == client_id]
+    # Récupérer le client sélectionné dans le DataFrame
+    selected_client = clients_data_scaled.loc[clients_data_scaled['SK_ID_CURR'] == client_id]
     
     # Assurez-vous que 'selected_client' contient bien un client
     if selected_client.empty:
         raise ValueError(f"Aucun client trouvé avec SK_ID_CURR = {client_id}")
     
-    proba = model.predict_proba(selected_client[feats])[0][1]  # Probabilité de la classe positive
-    prediction = model.predict(selected_client[feats])[0]
+    # Calcul de la probabilité de la classe positive
+    proba = model.predict_proba(selected_client[feats])[0][1]  # Probabilité de défaut
     
-    return proba, prediction, selected_client[feats]
+    # Récupérer le seuil correspondant et son nom
+    seuil_info = thresholds[seuil_nom]
+    seuil_valeur = seuil_info["valeur"]
+    seuil_nom_affiche = seuil_info["nom"]
+    
+    # Faire la prédiction en fonction du seuil
+    prediction = int(proba >= seuil_valeur)  # Prédiction basée sur le seuil choisi (0 ou 1)
+    
+    # Retourner la probabilité, la prédiction, les features utilisées, et le seuil avec son nom
+    return proba, prediction, selected_client[feats], seuil_valeur, seuil_nom_affiche
 
 
-
+def encode_image_to_base64(fig):
+    """Encode une figure Matplotlib en base64."""
+    buffer = BytesIO()
+    fig.savefig(buffer, format='png', bbox_inches='tight')
+    buffer.seek(0)
+    image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    buffer.close()
+    return f"data:image/png;base64,{image_base64}"
 
 def shap_waterfall_chart(selected_client, model, feat_number=10):
     """
     Génère un graphique waterfall SHAP pour un client spécifique.
-
-    Args:
-        selected_client (pd.DataFrame): Les features du client sélectionné.
-        model: Le modèle entraîné.
-        feat_number (int): Nombre de features à afficher dans le graphique.
-
-    Returns:
-        str: L'image du graphique SHAP encodée en base64.
     """
     # Vérifier que les données du client ne contiennent pas de colonne TARGET ou SK_ID_CURR
     selected_client = selected_client.drop(columns=['TARGET', 'SK_ID_CURR'], errors='ignore')
@@ -171,36 +200,17 @@ def shap_waterfall_chart(selected_client, model, feat_number=10):
         shap_values = shap_values[1]  # Classe positive
     
     # Générer le graphique waterfall SHAP
-    shap_plot = shap.plots.waterfall(shap.Explanation(values=shap_values[0], 
-                                                     base_values=explainer.expected_value[1], 
-                                                     data=selected_client.iloc[0], 
-                                                     feature_names=selected_client.columns), 
-                                     max_display=feat_number, show=False)
-
-    return encode_image_to_base64(shap_plot)
-
-
-
-def encode_image_to_base64(fig):
-    """Encode une figure Matplotlib en base64.
-
-    Args:
-        fig: La figure Matplotlib à encoder.
-
-    Returns:
-        str: La chaîne encodée en base64 représentant l'image.
-    """
-    # Créer un objet BytesIO pour capturer l'image
-    buffer = BytesIO()
+    plt.figure(figsize=(10, 6))
+    shap.waterfall_plot(shap.Explanation(values=shap_values[0],
+                                          base_values=explainer.expected_value,
+                                          data=selected_client.iloc[0], 
+                                          feature_names=selected_client.columns),
+                        max_display=feat_number)
     
-    # Sauvegarder la figure dans le buffer
-    fig.savefig(buffer, format='png', bbox_inches='tight')
-    buffer.seek(0)  # Remettre le pointeur au début du buffer
+    # Convertir le graphique en image encodée en base64
+    image_base64 = encode_image_to_base64(plt)
     
-    # Encoder le contenu du buffer en base64
-    image_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    # Fermer la figure pour éviter d'accumuler des figures ouvertes
+    plt.close()
     
-    # Fermer le buffer
-    buffer.close()
-    
-    return f"data:image/png;base64,{image_base64}"
+    return image_base64

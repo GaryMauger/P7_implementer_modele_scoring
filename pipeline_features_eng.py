@@ -12,7 +12,7 @@ df_data_5 = pd.read_pickle('C:/Users/mauge\Documents/github/P7_implementer_model
 # Fonction pour charger les DataFrames
 def load_data():
     # Charger les DataFrames à partir des fichiers CSV ou d'autres sources
-    df_data = pd.read_csv('application_test.csv')  # Exemple d'importation, ajustez selon vos sources
+    df_data = pd.read_csv('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/application_test.csv')  # Exemple d'importation, ajustez selon vos sources
     df_previous_application = pd.read_csv('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/previous_application.csv')
     df_credit_card_balance = pd.read_csv('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/credit_card_balance.csv')
     df_installments_payments = pd.read_csv('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/installments_payments.csv')
