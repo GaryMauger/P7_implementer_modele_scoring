@@ -94,6 +94,29 @@ def get_shap_waterfall_chart(client_id, feature_count):
         st.error("Erreur lors de la récupération du graphique SHAP.")
         return None
 
+def get_shap_waterfall_chart_bis(client_id, feature_count):
+    """Récupère le graphique SHAP en waterfall depuis l'API pour le client spécifié."""
+    # Préparez les données pour l'API
+    response = requests.post(
+        f"{API_URL}/get_shap_waterfall_chart_bis",
+        json={"client_id": client_id, "feature_count": feature_count}
+    )
+    
+    if response.status_code == 200:
+        # Le résultat est censé être encodé en base64 (comme une image)
+        return response.json().get("shap_chart")
+    else:
+        st.error("Erreur lors de la récupération du graphique SHAP.")
+        return None
+
+def display_shap_chart(client_id, feature_count):
+    """Affiche le graphique SHAP dans l'interface Streamlit."""
+    shap_chart_base64 = get_shap_waterfall_chart_bis(client_id, feature_count)
+    
+    if shap_chart_base64:
+        # Afficher l'image
+        st.image(shap_chart_base64, use_column_width=True)
+
 
 
 # ---------------------------------------- Interface Streamlit ---------------------------------------- #
@@ -154,10 +177,27 @@ if st.button("Afficher la prédiction"):
                         f"</div>",
                         unsafe_allow_html=True
                     )
+
+                # Sélectionner le nombre de paramètres à afficher
+                feat_number = 10  # Afficher les 10 features les plus importantes par défaut
+
+                # Appelez la fonction pour obtenir le graphique SHAP
+                base64_image = get_shap_waterfall_chart_bis(client_id_input, feat_number)
+
+                if base64_image:
+                    try:
+                        # Afficher le graphique SHAP
+                        st.image(f"data:image/png;base64,{base64_image}", use_column_width=True)
+                    except Exception as e:
+                        st.error(f"Erreur lors de l'affichage du graphique SHAP : {e}")
+                else:
+                    st.error("Impossible de charger le graphique SHAP.")
         else:
             st.error("Le numéro de client saisi n'est pas dans la liste des clients.")
     else:
         st.error("Veuillez entrer un numéro de client.")
+
+
 
 # ---------------------------------------- Description des colonnes ---------------------------------------- #
 with st.sidebar:

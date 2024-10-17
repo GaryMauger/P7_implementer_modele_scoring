@@ -182,6 +182,46 @@ def encode_image_to_base64(fig):
     buffer.close()
     return f"data:image/png;base64,{image_base64}"
 
+import matplotlib
+matplotlib.use('Agg')
+
+def shap_waterfall_chart_bis(selected_client, model, feat_number=10):
+    """
+    Génère un graphique waterfall SHAP pour un client spécifique.
+    """
+    # Vérifier que les données du client ne contiennent pas de colonne TARGET ou SK_ID_CURR
+    selected_client = selected_client.drop(columns=['TARGET', 'SK_ID_CURR'], errors='ignore')
+    
+    # Utiliser SHAP TreeExplainer pour le modèle
+    explainer = shap.TreeExplainer(model)
+    
+    # Calculer les valeurs SHAP pour les données du client
+    shap_values = explainer.shap_values(selected_client)
+    
+    # Pour les modèles de classification binaire, shap_values est une liste
+    if isinstance(shap_values, list):
+        shap_values = shap_values[1]  # Classe positive
+    
+    plt.ioff()
+    
+    # Générer le graphique waterfall SHAP
+    plt.figure(figsize=(10, 6))
+    shap.waterfall_plot(shap.Explanation(values=shap_values[0],
+                                          base_values=explainer.expected_value,
+                                          data=selected_client.iloc[0], 
+                                          feature_names=selected_client.columns),
+                        max_display=feat_number)
+    
+    # Convertir le graphique en image encodée en base64
+    image_base64 = encode_image_to_base64(plt)
+    
+    # Fermer la figure pour éviter d'accumuler des figures ouvertes
+    plt.close()
+    
+    return image_base64
+
+
+
 def shap_waterfall_chart(selected_client, model, feat_number=10):
     """
     Génère un graphique waterfall SHAP pour un client spécifique.
@@ -199,18 +239,23 @@ def shap_waterfall_chart(selected_client, model, feat_number=10):
     if isinstance(shap_values, list):
         shap_values = shap_values[1]  # Classe positive
     
+    plt.ioff()
+    
+    # Créer une nouvelle figure
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
     # Générer le graphique waterfall SHAP
-    plt.figure(figsize=(10, 6))
     shap.waterfall_plot(shap.Explanation(values=shap_values[0],
                                           base_values=explainer.expected_value,
                                           data=selected_client.iloc[0], 
                                           feature_names=selected_client.columns),
+                        ax=ax,
                         max_display=feat_number)
     
     # Convertir le graphique en image encodée en base64
-    image_base64 = encode_image_to_base64(plt)
+    image_base64 = encode_image_to_base64(fig)
     
     # Fermer la figure pour éviter d'accumuler des figures ouvertes
-    plt.close()
-    
+    plt.close(fig)  # Utiliser fig pour fermer correctement
+
     return image_base64

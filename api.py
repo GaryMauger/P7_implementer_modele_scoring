@@ -99,6 +99,40 @@ def encode_image_to_base64(fig):
     buffer.close()
     return f"data:image/png;base64,{image_base64}"
 
+from fastapi.responses import StreamingResponse
+
+@app.post("/get_shap_waterfall_chart_bis")
+async def get_shap_waterfall_chart_bis(client_id: float, feature_count: int = 10):
+    # Utilisez la fonction predict pour obtenir les valeurs
+    try:
+        proba, prediction, selected_client, seuil_valeur, seuil_nom_affiche = predict(client_id)
+        
+        # Convertir proba et prediction en types natifs Python
+        proba = float(proba)
+        prediction = float(prediction)
+
+        # Vérifiez que 'selected_client' est bien formé pour SHAP
+        print(f"Shape de selected_client : {selected_client.shape}")
+        print(f"Colonnes de selected_client : {selected_client.columns.tolist()}")
+
+        # Créer le graphique waterfall en utilisant la fonction définie dans utils
+        image_base64 = shap_waterfall_chart_bis(selected_client, model, feat_number=feature_count)
+
+        # Retourner les résultats
+        return {
+            "shap_chart": image_base64,
+            "probability": proba,
+            "prediction": prediction,
+            "seuil_valeur": seuil_valeur,
+            "seuil_nom_affiche": seuil_nom_affiche
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Une erreur est survenue lors de la génération du graphique SHAP.")
+
+
+
 
 @app.post("/get_shap_waterfall_chart")
 async def get_shap_waterfall_chart(client_id: float, feature_count: int = 10):
@@ -129,4 +163,3 @@ async def get_shap_waterfall_chart(client_id: float, feature_count: int = 10):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Une erreur est survenue lors de la génération du graphique SHAP.")
-
