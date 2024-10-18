@@ -2,6 +2,7 @@ import pickle
 import mlflow
 import pandas as pd
 import shap
+import numpy as np
 import io
 import base64
 import matplotlib.pyplot as plt
@@ -182,8 +183,8 @@ def encode_image_to_base64(fig):
     buffer.close()
     return f"data:image/png;base64,{image_base64}"
 
-import matplotlib
-matplotlib.use('Agg')
+#import matplotlib
+#matplotlib.use('Agg')
 
 def shap_waterfall_chart_bis(selected_client, model, feat_number=10):
     """
@@ -220,11 +221,11 @@ def shap_waterfall_chart_bis(selected_client, model, feat_number=10):
     
     return image_base64
 
-
+from streamlit_shap import st_shap
 
 def shap_waterfall_chart(selected_client, model, feat_number=10):
     """
-    Génère un graphique waterfall SHAP pour un client spécifique.
+    Génère un graphique waterfall SHAP pour un client spécifique et l'affiche directement.
     """
     # Vérifier que les données du client ne contiennent pas de colonne TARGET ou SK_ID_CURR
     selected_client = selected_client.drop(columns=['TARGET', 'SK_ID_CURR'], errors='ignore')
@@ -238,24 +239,35 @@ def shap_waterfall_chart(selected_client, model, feat_number=10):
     # Pour les modèles de classification binaire, shap_values est une liste
     if isinstance(shap_values, list):
         shap_values = shap_values[1]  # Classe positive
-    
-    plt.ioff()
-    
-    # Créer une nouvelle figure
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Générer le graphique waterfall SHAP
-    shap.waterfall_plot(shap.Explanation(values=shap_values[0],
-                                          base_values=explainer.expected_value,
-                                          data=selected_client.iloc[0], 
-                                          feature_names=selected_client.columns),
-                        ax=ax,
-                        max_display=feat_number)
-    
-    # Convertir le graphique en image encodée en base64
-    image_base64 = encode_image_to_base64(fig)
-    
-    # Fermer la figure pour éviter d'accumuler des figures ouvertes
-    plt.close(fig)  # Utiliser fig pour fermer correctement
 
-    return image_base64
+    # Créer un graphique waterfall SHAP
+    shap_explanation = shap.Explanation(values=shap_values[0],
+                                         base_values=explainer.expected_value,
+                                         data=selected_client.iloc[0], 
+                                         feature_names=selected_client.columns)
+
+    # Utiliser st_shap pour afficher le graphique dans Streamlit
+    st_shap(shap.waterfall_plot(shap_explanation, max_display=feat_number))
+
+
+def calculate_shap_values(selected_client, model):
+    """
+    Calcule et retourne les valeurs SHAP pour le client sélectionné, ainsi que les valeurs de base.
+    """
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(selected_client)
+
+    # Récupérer les valeurs de base
+    base_values = explainer.expected_value  # Cela renvoie les valeurs de base
+
+    if isinstance(shap_values, list):
+        shap_values = shap_values[1]  # Classe positive
+
+    # Conversion en types natifs
+    if isinstance(shap_values, np.ndarray):
+        shap_values = shap_values.tolist()  # Convertir les valeurs SHAP en liste
+    if isinstance(base_values, np.ndarray):
+        base_values = float(base_values)  # Convertir en float si c'est un tableau
+
+    return shap_values, base_values  # Retourner les valeurs SHAP et de base
+    

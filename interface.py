@@ -1,10 +1,23 @@
 # Pour démarrer l'application Streamlit, exécuter la commande suivante dans le terminal : streamlit run interface.py
 
-
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import json
 import streamlit as st
 import requests
 from PIL import Image
 import base64
+from streamlit_shap import st_shap
+import shap
+import mlflow
+import mlflow.lightgbm
+
+# Spécifier le chemin du modèle
+model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/535513794895831126/144f60891d2140538a6daad907da28a3/artifacts/model"
+
+# Charger le modèle à partir du chemin local
+model = mlflow.xgboost.load_model(model_path)
 
 # URL de base de l'API
 API_URL = "http://localhost:8000"
@@ -80,18 +93,24 @@ def get_all_features():
     
 
 def get_shap_waterfall_chart(client_id, feature_count):
-    """Récupère le graphique SHAP en waterfall depuis l'API pour le client spécifié."""
-    # Préparez les données pour l'API
+    """Récupère le graphique SHAP waterfall depuis l'API pour le client spécifié."""
+    # Préparez les paramètres pour l'API
+    params = {
+        "client_id": client_id,
+        "feature_count": feature_count
+    }
+
+    print(f"Données envoyées à l'API : {params}")  # Ajouté pour débogage
+
     response = requests.post(
         f"{API_URL}/get_shap_waterfall_chart",
-        json={"client_id": client_id, "feature_count": feature_count}
+        params=params  # Changer ici pour utiliser 'params' au lieu de 'json'
     )
     
     if response.status_code == 200:
-        # Le résultat est censé être encodé en base64 (comme une image)
-        return response.json().get("shap_chart")
+        return response.json()  # Indique que le graphique a été généré avec succès
     else:
-        st.error("Erreur lors de la récupération du graphique SHAP.")
+        st.error(f"Erreur lors de la récupération du graphique SHAP. Statut : {response.status_code}, Détails : {response.text}")
         return None
 
 def get_shap_waterfall_chart_bis(client_id, feature_count):
@@ -109,13 +128,47 @@ def get_shap_waterfall_chart_bis(client_id, feature_count):
         st.error("Erreur lors de la récupération du graphique SHAP.")
         return None
 
-def display_shap_chart(client_id, feature_count):
-    """Affiche le graphique SHAP dans l'interface Streamlit."""
-    shap_chart_base64 = get_shap_waterfall_chart_bis(client_id, feature_count)
-    
-    if shap_chart_base64:
-        # Afficher l'image
-        st.image(shap_chart_base64, use_column_width=True)
+from utils import feats  # Assurez-vous d'importer feats depuis utils.py
+
+def display_shap_chart(client_id, feature_count, selected_client):
+    """Affiche le graphique SHAP Waterfall dans l'interface Streamlit."""
+    shap_chart_data = get_shap_waterfall_chart(client_id, feature_count)
+
+    if shap_chart_data and isinstance(shap_chart_data, dict) and "shap_values" in shap_chart_data:
+        shap_values = shap_chart_data["shap_values"]  # Récupérer les valeurs SHAP
+        base_values = shap_chart_data.get("base_values", None)  # Récupérer les valeurs de base
+
+        # Vérifiez le type des valeurs SHAP
+        st.write("Type de shap_values :", type(shap_values))
+
+        if isinstance(shap_values, list) and len(shap_values) > 0:
+            # Convertir les valeurs SHAP en tableau NumPy
+            shap_values_array = np.array(shap_values[0])  # Prenez le premier élément de la liste
+
+            # Vérifiez que les dimensions correspondent
+            if len(shap_values_array) != len(feats):
+                st.error("Le nombre de valeurs SHAP ne correspond pas au nombre de features.")
+                return
+
+            # Créer un objet Explanation pour le graphique Waterfall
+            expl = shap.Explanation(values=shap_values_array, feature_names=feats, base_values=base_values)
+
+            # Créer un graphique Waterfall
+            plt.figure(figsize=(10, 6))
+            shap.waterfall_plot(expl, max_display=10)  # Affichez les 10 features les plus importantes
+
+            # Affichez le graphique dans Streamlit
+            st.pyplot(plt)
+            plt.close()  # Fermez la figure pour éviter d'afficher des graphiques en double
+
+        else:
+            st.error("Les valeurs SHAP ne sont pas dans un format reconnu.")
+    else:
+        st.error("Impossible d'afficher le graphique SHAP.")
+
+
+
+
 
 
 
@@ -132,68 +185,49 @@ st.markdown(
 )
 
 # 1. Section : Saisie du numéro du client
-# Vérifier si la liste des clients est déjà chargée dans la session
 if "clients" not in st.session_state:
     st.session_state.clients = get_clients_list()  # Obtenir la liste complète des clients
 
-# Créer une colonne pour l'entrée du numéro de client
-client_id_input = st.text_input("Entrez le numéro du client souhaité :")
+client_id_input = st.text_input("Entrez le numéro du client souhaité :", key="client_id_input")
 
 if st.button("Afficher la prédiction"):
     if client_id_input:
-        client_id_input = float(client_id_input)  # Convertir l'input en entier
-        # Vérifier si le client existe dans la liste complète
-        if client_id_input in st.session_state.clients:
-            st.session_state.selected_client = client_id_input
+        try:
+            client_id_input = float(client_id_input)  # Convertir l'input en float
 
-            # Charger les données du client et les informations de crédit
-            if "client_data" not in st.session_state or st.session_state.selected_client != client_id_input:
-                st.session_state.client_data = get_client_data(st.session_state.selected_client)
-                st.session_state.credit_info = get_credit_info(st.session_state.selected_client)
+            if client_id_input in st.session_state.clients:
+                st.session_state.selected_client = client_id_input
 
-            # Prédiction du score de crédit
-            if "prediction" not in st.session_state or st.session_state.selected_client != client_id_input:
-                st.session_state.prediction, st.session_state.proba = predict_credit(st.session_state.selected_client)
+                # Charger les données du client
+                if "client_data" not in st.session_state or st.session_state.selected_client != client_id_input:
+                    st.session_state.client_data = get_client_data(st.session_state.selected_client)
+                    st.session_state.credit_info = get_credit_info(st.session_state.selected_client)
 
-            # Afficher la prédiction si disponible
-            if st.session_state.prediction is not None:
-                # Convertir la probabilité en pourcentage pour le défaut
-                proba_defaut = (1 - st.session_state.proba) * 100  # Supposant que proba est la probabilité de non-défaut
-                if st.session_state.prediction == 0:
-                    # Prêt accordé
-                    st.markdown(
-                        f"<div style='background-color: green; padding: 10px; color: white; border-radius: 5px;'>"
-                        f"<strong>Prédiction : Prêt accordé</strong><br>"
-                        f"Probabilité de défaut : {proba_defaut:.2f}%"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
+                # Prédiction du score de crédit
+                if "prediction" not in st.session_state or st.session_state.selected_client != client_id_input:
+                    st.session_state.prediction, st.session_state.proba = predict_credit(st.session_state.selected_client)
+
+                if st.session_state.prediction is not None:
+                    proba_defaut = (1 - st.session_state.proba) * 100  # Convertir en pourcentage
+                    if st.session_state.prediction == 0:
+                        st.markdown(f"<div style='background-color: green; padding: 10px; color: white; border-radius: 5px;'>"
+                                    f"<strong>Prédiction : Prêt accordé</strong><br>"
+                                    f"Probabilité de défaut : {proba_defaut:.2f}%"
+                                    f"</div>", unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"<div style='background-color: red; padding: 10px; color: white; border-radius: 5px;'>"
+                                    f"<strong>Prédiction : Prêt refusé</strong><br>"
+                                    f"Probabilité de défaut : {proba_defaut:.2f}%"
+                                    f"</div>", unsafe_allow_html=True)
+
+                    # Afficher le graphique SHAP
+                    display_shap_chart(client_id_input, feature_count=10, selected_client=st.session_state.selected_client)  # Appel de votre fonction customisée
                 else:
-                    # Prêt refusé
-                    st.markdown(
-                        f"<div style='background-color: red; padding: 10px; color: white; border-radius: 5px;'>"
-                        f"<strong>Prédiction : Prêt refusé</strong><br>"
-                        f"Probabilité de défaut : {proba_defaut:.2f}%"
-                        f"</div>",
-                        unsafe_allow_html=True
-                    )
-
-                # Sélectionner le nombre de paramètres à afficher
-                feat_number = 10  # Afficher les 10 features les plus importantes par défaut
-
-                # Appelez la fonction pour obtenir le graphique SHAP
-                base64_image = get_shap_waterfall_chart_bis(client_id_input, feat_number)
-
-                if base64_image:
-                    try:
-                        # Afficher le graphique SHAP
-                        st.image(f"data:image/png;base64,{base64_image}", use_column_width=True)
-                    except Exception as e:
-                        st.error(f"Erreur lors de l'affichage du graphique SHAP : {e}")
-                else:
-                    st.error("Impossible de charger le graphique SHAP.")
-        else:
-            st.error("Le numéro de client saisi n'est pas dans la liste des clients.")
+                    st.error("La prédiction est introuvable.")
+            else:
+                st.error("Le numéro de client saisi n'est pas dans la liste des clients.")
+        except ValueError:
+            st.error("Veuillez entrer un numéro de client valide.")
     else:
         st.error("Veuillez entrer un numéro de client.")
 
