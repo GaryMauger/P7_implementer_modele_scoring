@@ -70,6 +70,13 @@ df_clients_scaled = scaler.fit_transform(df_clients)
 df_clients_scaled = pd.DataFrame(df_clients_scaled, columns=df_clients.columns, index=df_clients.index)
 df_clients_scaled.head()
 
+# Charger le fichier des descriptions de colonnes
+column_description = pd.read_csv(data_path + 'Projet+Mise+en+prod+-+home-credit-default-risk/' + "HomeCredit_columns_description.csv", 
+                                 usecols=['Row', 'Description'], 
+                                 index_col=0, 
+                                 encoding='unicode_escape')
+
+column_description.head()
 
 ###################################################
 ###################################################       MODÈLES DE DONNÉES       ######################################################
@@ -77,23 +84,23 @@ df_clients_scaled.head()
 
 # Définition des seuils avec leurs noms associés du business score
 thresholds = {
-    "Sans": {"valeur": 0.05, "nom": "Sans risque"},
-    "Faible": {"valeur": 0.17, "nom": "Faible coût"},
-    "Modéré": {"valeur": 0.50, "nom": "Coût modéré"},
-    "Elevé": {"valeur": 0.28, "nom": "Coût élevé"}
+    "Faible": {"valeur": 0.05, "nom": "Très faible risque de refus"},
+    "Modéré": {"valeur": 0.17, "nom": "Risque modéré de refus"},
+    "Neutre": {"valeur": 0.50, "nom": "Risque neutre de refus"},
+    "Elevé": {"valeur": 0.70, "nom": "Risque élevé de refus"}
 }
 
 class SeuilNom(str, Enum):
-    Sans = "Sans"
     Faible = "Faible"
     Modéré = "Modéré"
+    Neutre = "Neutre"
     Elevé = "Elevé"
 
 class RequestObject(BaseModel):
     client_id: Optional[int] = None
     feat_number: Optional[int] = None
     feat_name: Optional[str] = None
-    seuil_nom: SeuilNom = SeuilNom.Faible  # Utilise l'Enum avec une valeur par défaut
+    seuil_nom: SeuilNom = SeuilNom.Modéré  # Utilise l'Enum avec une valeur par défaut
 
 # Modèle de réponse
 class ClientResponse(BaseModel):
@@ -121,7 +128,7 @@ def read_root():
 ###################################################       FONCTION DE PRÉDICTION       ######################################################
 ###################################################
 
-def predict(client_id, seuil_nom="Faible"):
+def predict(client_id, seuil_nom="Modéré"):
     """
     Effectue la prédiction du score de crédit pour un client donné en utilisant le seuil spécifié.
     
@@ -225,6 +232,49 @@ def plot_waterfall(client_id):
     return f"data:image/png;base64,{image_base64}"  # Retourne l'image en base64 pour l'affichage
 
 
+def plot_global_feature_importance(df_clients_scaled):
+    """
+    Fonction pour calculer et afficher l'importance des caractéristiques globales avec SHAP.
+
+    Parameters:
+    - X : DataFrame contenant les caractéristiques du jeu de données.
+
+    Returns:
+    - str: Image en base64 de l'importance des caractéristiques globales.
+    """
+    # Calculer les valeurs SHAP pour l'ensemble du jeu de données
+    explainer = shap.Explainer(model, df_clients_scaled)  # Utiliser le modèle et les caractéristiques
+    shap_values = explainer(df_clients_scaled)
+
+    # Calculer l'importance globale des caractéristiques
+    feature_importance = np.abs(shap_values.values).mean(axis=0)  # Moyenne des valeurs absolues
+
+    # Créer un DataFrame pour l'importance des caractéristiques
+    feature_importance_df = pd.DataFrame({
+        'Feature': df_clients_scaled.columns,
+        'Importance': feature_importance
+    })
+
+    # Trier par importance décroissante
+    feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False)
+
+    # Afficher le graphique de l'importance des caractéristiques
+    plt.figure(figsize=(12, 8))
+    plt.barh(feature_importance_df['Feature'][:10], feature_importance_df['Importance'][:10], color='skyblue')
+    plt.xlabel('Importance moyenne (valeurs SHAP)')
+    plt.title('Importance des caractéristiques globales')
+    plt.gca().invert_yaxis()  # Inverser l'axe y pour afficher la plus importante en haut
+
+    # Enregistrer le graphique en tant qu'image et l'encoder en base64 pour l'affichage
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight')
+    plt.close()  # Fermer la figure pour éviter l'affichage dans le notebook
+    buf.seek(0)
+    image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+
+    return f"data:image/png;base64,{image_base64}"  # Retourne l'image en base64 pour l'affichage
+
+
 ###################################################       ROUTE POUR LE GRAPHIQUE WATERFALL       ######################################################
 
 @app.get("/waterfall/{client_id}")
@@ -236,10 +286,19 @@ def get_waterfall(client_id: int):
         raise HTTPException(status_code=404, detail=str(e))
     
 
+# Exemple d'utilisation de la fonction dans votre endpoint
+@app.get("/global_feature_importance/")
+def get_global_feature_importance():
+    # Supposons que df_clients_scaled soit votre DataFrame contenant les données des clients
+    global_feature_importance_image = plot_global_feature_importance(df_clients_scaled.drop(columns=['TARGET'], errors='ignore'))
+    return {"image": global_feature_importance_image}
+
+
+
  
-###################################################
+############################################################################################################################################################
 ###################################################       FONCTION POUR LES INFORMATIONS CLIENTS       ######################################################
-###################################################
+############################################################################################################################################################
     
 ###################################################       ROUTE POUR LA LISTE DES CLIENTS       ######################################################
 
@@ -250,7 +309,10 @@ def get_clients():
     return {"client_ids": client_ids}
 
 
+###################################################
 ###################################################       FONCTION POUR DES INFORMATIONS SUR LE CLIENT       ######################################################
+###################################################
+
 
 def client_info(client_id):
     """
@@ -281,7 +343,9 @@ def get_client_info(client_id: int):
     return client_info(client_id)
 
 
+###################################################
 ###################################################       FONCTION POUR DES INFORMATIONS SUR LE CREDIT       ######################################################
+###################################################
 
 def credit_info(client_id):
     """
@@ -305,3 +369,19 @@ def get_credit_info(client_id: int):
     """
     return credit_info(client_id)
 
+
+###################################################
+###################################################       FONCTION POUR DES INFORMATIONS SUR LES VARIABLES       ######################################################
+###################################################
+
+
+@app.get("/descriptions/")
+def get_all_column_descriptions():
+    """
+    Retourne toutes les descriptions des colonnes disponibles.
+    
+    Returns:
+        dict: Dictionnaire de toutes les colonnes et leurs descriptions.
+    """
+    descriptions = column_description["Description"].to_dict()
+    return {"descriptions": descriptions}
