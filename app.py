@@ -99,7 +99,8 @@ def get_column_descriptions():
 
 
 # Charger le logo depuis le chemin spécifié
-logo_path = r"C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Logo_pret_a_depenser.png"
+#logo_path = r"C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Logo_pret_a_depenser.png"
+logo_path = "./Data/"
 logo_image = Image.open(logo_path)
 
 # Configurer la mise en page pour qu'elle soit large
