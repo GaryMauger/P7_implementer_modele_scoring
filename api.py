@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import io
 import base64
 import matplotlib
+import os
 matplotlib.use('Agg')  # Ajoutez ceci au début de votre fichier
 
 
@@ -30,14 +31,36 @@ app = FastAPI()
 ###################################################       CHARGEMENT DES DONNÉES ET DU MODÈLE       ######################################################
 ###################################################
 
+# Détecter si l'application s'exécute en local ou dans le cloud
+IS_CLOUD = os.getenv("IS_CLOUD", "False").lower() == "true"
+
+# Chemins d'accès aux fichiers
+if IS_CLOUD:
+    AZURE_STORAGE_ACCOUNT = "projet7"
+    AZURE_CONTAINER = "csvscoring"
+    # Remplace ces chemins par les chemins d'accès Azure appropriés
+    model_path = f"azure://{AZURE_STORAGE_ACCOUNT}/{AZURE_CONTAINER}/Projet+Mise+en+prod+-+home-credit-default-risk/model"
+    data_path = f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/{AZURE_CONTAINER}/"
+else:
+    model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/535513794895831126/144f60891d2140538a6daad907da28a3/artifacts/model"
+    data_path = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/"
+
+
 # Charger le modèle
-model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/535513794895831126/144f60891d2140538a6daad907da28a3/artifacts/model"
+#model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/535513794895831126/144f60891d2140538a6daad907da28a3/artifacts/model"
 model = mlflow.xgboost.load_model(model_path)
 
 # Charger les données au démarrage
-data_path = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/"
+#data_path = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/"
 df_clients = pipeline_features_eng.execute_pipeline()
 df_application_test = pd.read_csv(data_path + 'Projet+Mise+en+prod+-+home-credit-default-risk/' + 'application_test.csv')
+
+# Charger le fichier des descriptions de colonnes
+column_description = pd.read_csv(data_path + 'Projet+Mise+en+prod+-+home-credit-default-risk/' + "HomeCredit_columns_description.csv", 
+                                 usecols=['Row', 'Description'], 
+                                 index_col=0, 
+                                 encoding='unicode_escape')
+
 
 df_clients.head()
 df_application_test.head()
@@ -70,11 +93,7 @@ df_clients_scaled = scaler.fit_transform(df_clients)
 df_clients_scaled = pd.DataFrame(df_clients_scaled, columns=df_clients.columns, index=df_clients.index)
 df_clients_scaled.head()
 
-# Charger le fichier des descriptions de colonnes
-column_description = pd.read_csv(data_path + 'Projet+Mise+en+prod+-+home-credit-default-risk/' + "HomeCredit_columns_description.csv", 
-                                 usecols=['Row', 'Description'], 
-                                 index_col=0, 
-                                 encoding='unicode_escape')
+
 
 column_description.head()
 
@@ -191,7 +210,7 @@ def predict_client(request: RequestObject):
 
 
 ###################################################
-###################################################       FONCTION POUR GÉNÉRER LE GRAPHIQUE WATERFALL       ######################################################
+###################################################       FONCTION POUR GÉNÉRER LES GRAPHIQUES DE FEATURES IMPORTANCE       ######################################################
 ###################################################
 
 def plot_waterfall(client_id):
@@ -275,7 +294,7 @@ def plot_global_feature_importance(df_clients_scaled):
     return f"data:image/png;base64,{image_base64}"  # Retourne l'image en base64 pour l'affichage
 
 
-###################################################       ROUTE POUR LE GRAPHIQUE WATERFALL       ######################################################
+###################################################       ROUTE POUR LA FEATURES IMPORTANCE LOCALE       ######################################################
 
 @app.get("/waterfall/{client_id}")
 def get_waterfall(client_id: int):
@@ -284,7 +303,8 @@ def get_waterfall(client_id: int):
         return {"waterfall_image": image_base64}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    
+
+###################################################       ROUTE POUR LA FEATURES IMPORTANCE GLOBALE       ######################################################    
 
 # Exemple d'utilisation de la fonction dans votre endpoint
 @app.get("/global_feature_importance/")
