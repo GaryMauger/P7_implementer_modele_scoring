@@ -4,46 +4,21 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.preprocessing import LabelEncoder
 import joblib
-import os
-
-# Détecter si l'application s'exécute en local ou dans le cloud
-IS_CLOUD = os.getenv("IS_CLOUD", "False").lower() == "true"
-
-# Chemins d'accès aux fichiers
-if IS_CLOUD:
-    AZURE_STORAGE_ACCOUNT = "projet7"
-    AZURE_CONTAINER = "csvscoring"
-    
-    # Chemins d'accès pour Azure
-    encoders_url = f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/{AZURE_CONTAINER}/label_encoders.pkl"
-    df_data_5_url = f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/{AZURE_CONTAINER}/encoded_features.pkl"
-    
-    def load_data():
-        df_data = pd.read_csv(f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/{AZURE_CONTAINER}/Projet+Mise+en+prod+-+home-credit-default-risk/application_test.csv")
-        df_previous_application = pd.read_csv(f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/{AZURE_CONTAINER}/Projet+Mise+en+prod+-+home-credit-default-risk/previous_application.csv")
-        df_credit_card_balance = pd.read_csv(f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/{AZURE_CONTAINER}/Projet+Mise+en+prod+-+home-credit-default-risk/Projet+Mise+en+prod+-+home-credit-default-risk/credit_card_balance.csv")
-        df_installments_payments = pd.read_csv(f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/{AZURE_CONTAINER}/Projet+Mise+en+prod+-+home-credit-default-risk/installments_payments.csv")
-        df_POS_CASH_balance = pd.read_csv(f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/{AZURE_CONTAINER}/Projet+Mise+en+prod+-+home-credit-default-risk/POS_CASH_balance.csv")
-        
-        return df_data, df_previous_application, df_credit_card_balance, df_installments_payments, df_POS_CASH_balance
-
-else:
-    # Chemins d'accès pour le mode local
-    encoders_url = 'C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/label_encoders.pkl'
-    df_data_5_url = 'C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/encoded_features.pkl'
-    
-    def load_data():
-        df_data = pd.read_csv('C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/application_test.csv')
-        df_previous_application = pd.read_csv('C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/previous_application.csv')
-        df_credit_card_balance = pd.read_csv('C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/credit_card_balance.csv')
-        df_installments_payments = pd.read_csv('C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/installments_payments.csv')
-        df_POS_CASH_balance = pd.read_csv('C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/POS_CASH_balance.csv')
-        
-        return df_data, df_previous_application, df_credit_card_balance, df_installments_payments, df_POS_CASH_balance
 
 # Chargement des encodeurs depuis le fichier
-encoders = joblib.load(encoders_url)
-df_data_5 = pd.read_pickle(df_data_5_url)
+encoders = joblib.load('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/label_encoders.pkl')
+df_data_5 = pd.read_pickle('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/encoded_features.pkl')
+
+# Fonction pour charger les DataFrames
+def load_data():
+    # Charger les DataFrames à partir des fichiers CSV ou d'autres sources
+    df_data = pd.read_csv('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/application_test.csv')  # Exemple d'importation, ajustez selon vos sources
+    df_previous_application = pd.read_csv('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/previous_application.csv')
+    df_credit_card_balance = pd.read_csv('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/credit_card_balance.csv')
+    df_installments_payments = pd.read_csv('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/installments_payments.csv')
+    df_POS_CASH_balance = pd.read_csv('C:/Users/mauge\Documents/github/P7_implementer_modele_scoring/Projet+Mise+en+prod+-+home-credit-default-risk/POS_CASH_balance.csv')
+    
+    return df_data, df_previous_application, df_credit_card_balance, df_installments_payments, df_POS_CASH_balance
 
 # Fonction pour préparer les jointures sur df_previous_application
 def prepare_aggregations(df_data, df_previous_application, df_credit_card_balance, df_installments_payments, df_POS_CASH_balance):
