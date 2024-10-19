@@ -1,19 +1,20 @@
-# Ignorer les dossiers de cache
-__pycache__/
-.ipynb_checkpoints/
+# Ignorer tout par défaut
+*
 
-# Ignorer les configurations d'IDE
-.vscode/
-.idea/
+# Conserver le dossier Data et son contenu
+!Data/
+!Data/**
+!.github/
+!.github/** */
 
-best_model_xgb/
-
-*.csv
-*.pkl
-
-# Ignorer les fichiers de suivi MLFlow
-mlruns/
-mlartifacts/
-
-# Ignorer les fichiers d'artifacts CatBoost
-catboost_info/
+# Conserver les fichiers spécifiques
+!.gitattributes
+!.gitignore
+!api.py
+!app.py
+!home_credit.png
+!Logo_pret_a_depenser.png
+!Projet_7_1.ipynb
+!Projet_7_2.ipynb
+!README.md
+!requirements.txt
