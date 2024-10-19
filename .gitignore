@@ -5,7 +5,7 @@
 !Data/
 !Data/**
 !.github/
-!.github/** */
+!.github/**
 
 # Conserver les fichiers spécifiques
 !.gitattributes
