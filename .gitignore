@@ -6,6 +6,8 @@
 !Data/**
 !.github/
 !.github/**
+!app_streamlit/
+!app_streamlit/**
 
 # Conserver les fichiers spécifiques
 !.gitattributes
