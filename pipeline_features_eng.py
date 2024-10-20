@@ -180,3 +180,27 @@ def execute_pipeline():
 
 # Exécuter le pipeline
 df_final = execute_pipeline()
+
+
+
+df_clients = df_final
+
+data_path = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/"
+
+df_application_test = pd.read_csv(data_path + 'Projet+Mise+en+prod+-+home-credit-default-risk/' + 'application_test.csv')
+
+df_clients = df_clients[df_clients['SK_ID_CURR'].isin(df_application_test['SK_ID_CURR'])]
+
+# Échantillonner 5000 lignes aléatoirement (assurez-vous que le DataFrame contient au moins 5000 lignes)
+df_clients = df_clients.sample(n=5000, random_state=42)
+
+# Créer un df_application_test_sample en utilisant les mêmes SK_ID_CURR que df_clients_sample
+df_application_test = df_application_test[df_application_test['SK_ID_CURR'].isin(df_clients['SK_ID_CURR'])]
+
+# Chemin où enregistrer le fichier localement
+output_path = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Data/df_clients.csv"
+output_path_application = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Data/df_application_test.csv"
+
+# Enregistrer le DataFrame en CSV (sans compression ici pour faciliter l'utilisation sur GitHub)
+df_clients.to_csv(output_path, index=False)
+df_application_test.to_csv(output_path_application, index=False)

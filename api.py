@@ -9,7 +9,7 @@ import numpy as np
 from pydantic import BaseModel
 from typing import Optional, List
 from sklearn.preprocessing import MinMaxScaler
-import pipeline_features_eng
+#import pipeline_features_eng
 from enum import Enum
 import shap
 import matplotlib.pyplot as plt
@@ -31,9 +31,6 @@ app = FastAPI()
 ###################################################       CHARGEMENT DES DONNÉES ET DU MODÈLE       ######################################################
 ###################################################
 
-# Charger le modèle
-#model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/mlartifacts/535513794895831126/144f60891d2140538a6daad907da28a3/artifacts/model"
-
 ##################################################
 
 model_path = "./Data/model"
@@ -53,24 +50,6 @@ column_description = pd.read_csv(os.path.join(data_path, "HomeCredit_columns_des
 
 
 ##################################################
-
-#model_path = "file:///C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Data/model"
-#model = mlflow.xgboost.load_model(model_path)
-#data_path = "C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Data/"
-##df_clients = pipeline_features_eng.execute_pipeline()
-
-#df_application_test = pd.read_csv(data_path + 'df_application_test.csv')
-#df_clients = pd.read_csv(data_path + 'df_clients.csv')
-
-#column_description = pd.read_csv(data_path + "HomeCredit_columns_description.csv", 
-                                 #usecols=['Row', 'Description'], 
-                                 #index_col=0, 
-                                 #encoding='unicode_escape')
-##################################################
-
-
-
-
 
 # Filtrer les clients
 #df_clients = df_clients[df_clients['SK_ID_CURR'].isin(df_application_test['SK_ID_CURR'])]
