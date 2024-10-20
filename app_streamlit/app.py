@@ -3,7 +3,8 @@ import requests
 from PIL import Image
 
 # ---------------------------------------- Configuration de l'API ----------------------------------------
-API_URL = "http://localhost:8000"  # Remplacez par l'URL de votre API
+#API_URL = "http://localhost:8000"  # Remplacez par l'URL de votre API
+API_URL = "fastapi-credit-scoring-c3h7f2hfd3behne7.westeurope-01.azurewebsites.net"
 
 # ---------------------------------------- Fonctions API ----------------------------------------
 def predict_credit(client_id, seuil_nom):
@@ -100,7 +101,8 @@ def get_column_descriptions():
 
 # Charger le logo depuis le chemin spécifié
 #logo_path = r"C:/Users/mauge/Documents/github/P7_implementer_modele_scoring/Logo_pret_a_depenser.png"
-logo_path = "./Data/"
+#logo_path = "./Data/"
+logo_path = "./Logo_pret_a_depenser.png"
 logo_image = Image.open(logo_path)
 
 # Configurer la mise en page pour qu'elle soit large
