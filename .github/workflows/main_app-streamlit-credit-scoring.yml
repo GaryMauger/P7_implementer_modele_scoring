@@ -44,4 +44,4 @@ jobs:
         app-name: 'app-streamlit-credit-scoring'
         slot-name: 'production'
         publish-profile: ${{ secrets.AZURE_STREAMLIT_PUBLISH_PROFILE }}
-        images: 'index.docker.io/${{ secrets.DOCKER_USERNAME}}/maugergary/streamlit-app:${{ github.sha }}'
+        images: 'index.docker.io/${{ secrets.DOCKER_USERNAME }}/streamlit-app:${{ github.sha }}'
