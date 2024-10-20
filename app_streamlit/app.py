@@ -4,7 +4,7 @@ from PIL import Image
 
 # ---------------------------------------- Configuration de l'API ----------------------------------------
 #API_URL = "http://localhost:8000"  # Remplacez par l'URL de votre API
-API_URL = "fastapi-credit-scoring-c3h7f2hfd3behne7.westeurope-01.azurewebsites.net"
+API_URL = "https://fastapi-credit-scoring-c3h7f2hfd3behne7.westeurope-01.azurewebsites.net"
 
 # ---------------------------------------- Fonctions API ----------------------------------------
 def predict_credit(client_id, seuil_nom):
