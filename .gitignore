@@ -21,6 +21,7 @@
 !README.md
 !requirements.txt
 !CI_CD_pipeline.py
+!test_unitaires_api.py
 
 !dockerignore
 !Dockerfile
