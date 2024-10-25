@@ -22,6 +22,7 @@
 !requirements.txt
 !CI_CD_pipeline.py
 !test_unitaires_api.py
+!data_drift_report.html
 
 !dockerignore
 !Dockerfile
