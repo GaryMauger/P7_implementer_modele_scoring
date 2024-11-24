@@ -1,10 +1,13 @@
 import streamlit as st
 import requests
 from PIL import Image
+import pandas as pd  # Bibliothèque pour manipuler des DataFrames
+import plotly.express as px  # Bibliothèque pour des graphiques interactifs
+import plotly.graph_objects as go
 
 # ---------------------------------------- Configuration de l'API ----------------------------------------
-#API_URL = "http://localhost:8000"  # Remplacez par l'URL de votre API
-API_URL = "https://fastapi-credit-scoring-c3h7f2hfd3behne7.westeurope-01.azurewebsites.net"
+API_URL = "http://localhost:8000"  # Remplacez par l'URL de votre API
+#API_URL = "https://fastapi-credit-scoring-c3h7f2hfd3behne7.westeurope-01.azurewebsites.net"
 
 # ---------------------------------------- Fonctions API ----------------------------------------
 def predict_credit(client_id, seuil_nom):
@@ -44,6 +47,17 @@ def get_global_feature_importance_graph():
         st.error("Erreur lors de la récupération du graphique d'importance globale.")
         return None
 
+
+def get_top_features(client_id):
+    """Récupération des 10 variables les plus influentes via l'API."""
+    response = requests.get(f"{API_URL}/top_features/{client_id}")
+    if response.status_code == 200:
+        return response.json()
+    else:
+        st.error(f"Erreur lors de la récupération des top features. (Code: {response.status_code})")
+        return None
+
+
 # Fonction pour récupérer les identifiants clients depuis l'API
 def fetch_client_ids():
     response = requests.get(f"{API_URL}/clients")
@@ -67,6 +81,89 @@ def get_client_info(client_id):
     else:
         st.error("Erreur lors de la récupération des informations client.")
         return None
+    
+
+def get_client_position(client_id, variables):
+    """
+    Récupération de la position d'un client par rapport à la moyenne et la médiane pour les variables spécifiées via l'API.
+    """
+    response = requests.post(
+        f"{API_URL}/client_position",
+        json={"client_id": client_id, "variables": variables}
+    )
+
+    if response.status_code == 200:
+        # Convertir la réponse JSON
+        position_data = response.json()
+        if "comparisons" not in position_data:
+            st.error(f"Aucune donnée de comparaison disponible pour le client ID {client_id}.")
+            return None
+        return position_data  # Retourne toutes les données de la réponse
+    else:
+        # Gérer les erreurs de requête
+        st.error(f"Erreur lors de la récupération des comparaisons. (Code: {response.status_code})")
+        return None
+
+
+@st.cache_data
+def fetch_available_variables(client_id):
+    """
+    Récupère dynamiquement les variables disponibles pour un client spécifique via l'API.
+    Retourne les noms des variables et leurs types (numérique ou catégoriel).
+    """
+    response = requests.get(f"{API_URL}/available_variables/{client_id}")
+    if response.status_code == 200:
+        # Extraire les variables avec leur type depuis la réponse JSON
+        variables_data = response.json().get("variables", [])
+        return variables_data  # Retourne la liste complète des variables avec leur type
+    else:
+        st.error(f"Erreur lors de la récupération des variables disponibles. (Code: {response.status_code})")
+        return []
+
+
+
+@st.cache_data(show_spinner=False)
+def get_client_distribution(client_id, variables):
+    """
+    Récupération de la distribution d'un client par rapport aux variables spécifiées via l'API.
+    """
+    try:
+        response = requests.post(
+            f"{API_URL}/client_distribution",
+            json={"client_id": client_id, "variables": variables}
+        )
+
+        if response.status_code == 200:
+            # Convertir la réponse JSON
+            distribution_data = response.json()
+
+            # Vérifier que les données de distribution sont présentes
+            if "distributions" not in distribution_data:
+                st.error(f"Aucune donnée de distribution disponible pour le client ID {client_id}.")
+                return None
+
+            # Retourner les données
+            return distribution_data
+
+        elif response.status_code == 404:
+            st.error(f"Client ID {client_id} introuvable dans la base de données.")
+            return None
+
+        elif response.status_code == 400:
+            st.error("Certaines variables demandées sont invalides ou manquantes.")
+            return None
+
+        else:
+            # Gérer les erreurs non spécifiées
+            st.error(f"Erreur inconnue : {response.status_code}. Message : {response.text}")
+            return None
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erreur de connexion à l'API : {str(e)}")
+        return None
+
+
+
 
 def get_credit_info(client_id):
     """Récupération des informations de crédit du client via l'API."""
@@ -91,6 +188,51 @@ def get_column_descriptions():
     else:
         st.error(f"Erreur lors de la récupération des descriptions. Code de statut : {response.status_code}, Contenu : {response.text}")
         return {}
+
+# Fonction pour afficher une jauge sous forme de barre horizontale
+def afficher_jauge_horizontale(score_client, seuil_score, prediction):
+    # Couleur de la jauge en fonction de la prédiction
+    couleur = "green" if prediction == 0 else "red"
+    
+    # Création de la jauge sous forme de barre
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",  # Mode avec jauge et valeur numérique
+        value=score_client,  # Score client
+        #number={'suffix': "/100"},  # Ajouter le suffixe "/100"
+        gauge={
+            'axis': {'range': [25, 100]},  # Plage de la jauge
+            'bar': {'color': couleur, 'thickness':1},  # Couleur de la barre de jauge
+            'threshold': {
+                'line': {'color': "black", 'width': 7},  # Ligne verticale pour le seuil
+                'thickness': 1,  # Épaisseur de la barre
+                'value': seuil_score  # Position du seuil
+            }
+        }
+    ))
+    
+    # Orientation horizontale et mise en page
+    fig.update_layout(
+        width=1200,  # Largeur de la jauge
+        height=230,  # Hauteur de la jauge
+        margin=dict(l=20, r=20, t=25, b=25),  # Marges
+    )
+    return fig
+
+
+# Initialisation ou récupération de l'état global
+def get_state():
+    if "state" not in st.session_state:
+        st.session_state["state"] = {
+            "data_received": False,
+            "data": None,
+            "last_client_id": None,
+            "last_seuil_nom": "Modéré",  # Suivre le dernier seuil utilisé
+        }
+    return st.session_state["state"]
+
+state = get_state()
+
+
 
 
 
@@ -117,11 +259,17 @@ st.title("Prédiction de Scoring Crédit")
 # Récupérer la liste des identifiants clients
 valid_client_ids = fetch_client_ids()
 
-# Saisie de l'identifiant client
-if 'client_id' not in st.session_state:
-    st.session_state.client_id = valid_client_ids[0]  # Valeur par défaut
+# Sélection de l'ID client avec une validation basée sur l'état
+client_id = st.selectbox(
+    "Sélectionnez l'ID du client :", 
+    valid_client_ids, 
+    index=valid_client_ids.index(state["last_client_id"]) if state["last_client_id"] in valid_client_ids else 0,
+)
+# Mise à jour de l'état si l'ID client change
+if client_id != state["last_client_id"]:
+    state["last_client_id"] = client_id
+    state["data_received"] = False  # Réinitialiser l'état de réception des données
 
-client_id = st.selectbox("Sélectionnez l'ID du client :", valid_client_ids, index=valid_client_ids.index(st.session_state.client_id), key="client_id")
 
 # Saisie de l'identifiant client
 #client_id = st.selectbox("Sélectionnez l'ID du client :", valid_client_ids, key="client_id")
@@ -134,46 +282,390 @@ seuils = {
     "Elevé": "Risque élevé (0.70) : On est très tolérant au risque, et on refuse le prêt seulement si la probabilité de défaut est extrêmement élevée (70%)"
 }
 
-# Saisir le seuil avec une description
-if 'seuil_nom' not in st.session_state:
-    st.session_state.seuil_nom = "Faible"  # Valeur par défaut
+# Définir les seuils
+thresholds = {
+    "Faible": {"valeur": 0.05, "nom": "Très faible risque de refus"},
+    "Modéré": {"valeur": 0.17, "nom": "Risque modéré de refus"},
+    "Neutre": {"valeur": 0.50, "nom": "Risque neutre de refus"},
+    "Elevé": {"valeur": 0.70, "nom": "Risque élevé de refus"}
+}
 
-seuil_nom = st.selectbox("Sélectionnez le seuil :", options=list(seuils.keys()), index=list(seuils.keys()).index(st.session_state.seuil_nom), key="seuil")
+# Sélection du seuil
+seuil_nom = st.selectbox(
+    "Sélectionnez le seuil :", 
+    options=list(thresholds.keys()), 
+    index=list(thresholds.keys()).index(state.get("last_seuil_nom", "Modéré")),
+)
 
-# Saisir le seuil avec une description
-#seuil_nom = st.selectbox("Sélectionnez le seuil :", options=list(seuils.keys()), key="seuil")
+# Si le seuil change, réinitialiser les données
+if seuil_nom != state.get("last_seuil_nom"):
+    state["last_seuil_nom"] = seuil_nom
+    state["data_received"] = False  # Forcer un nouvel appel API
+
+
+
 
 # Afficher la description du seuil sélectionné
-#st.write("### Description du seuil sélectionné :")
-st.write(seuils[seuil_nom])
+st.write(f"*{seuils[seuil_nom]}*")
 
-if st.button("Prédire"):
-    # Appel de la fonction de prédiction
-    proba, prediction, features = predict_credit(client_id, seuil_nom)
 
-    if proba is not None:
-        proba_defaut = proba * 100  # Convertir la probabilité en pourcentage
-        if prediction == 0:
-            # Prêt accordé (pas de défaut), affichage en vert
-            st.markdown(f"<div style='background-color: green; padding: 10px; color: white; border-radius: 5px;'>"
-                        f"<strong>Prédiction : Prêt accordé</strong><br>"
-                        f"Probabilité de défaut : {proba_defaut:.2f}%"
-                        f"</div>", unsafe_allow_html=True)
+ 
+
+# CSS pour personnaliser le bouton
+st.markdown("""
+    <style>
+    div.stButton > button:first-child {
+        background-color: #6c757d;
+        color: white;
+        font-size: 100px;
+        padding: 20px 48px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+    div.stButton > button:first-child:hover {
+        background-color: #5a6268;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Bouton "Prédire" et gestion de l'état
+if st.button("Prédire") or state["data_received"]:
+    # Vérifier si les données doivent être recalculées
+    if not state["data_received"]:
+        response = requests.post(
+            f"{API_URL}/predict", 
+            json={"client_id": client_id, "seuil_nom": seuil_nom}
+        )
+        if response.status_code == 200:
+            state["data"] = response.json()
+            state["data_received"] = True
         else:
-            # Prêt refusé (défaut), affichage en rouge
-            st.markdown(f"<div style='background-color: red; padding: 10px; color: white; border-radius: 5px;'>"
-                        f"<strong>Prédiction : Prêt refusé</strong><br>"
-                        f"Probabilité de défaut : {proba_defaut:.2f}%"
-                        f"</div>", unsafe_allow_html=True)
+            st.error(f"Erreur lors de l'appel API : {response.status_code}")
+            state["data"] = None
+            state["data_received"] = False
 
-        # Afficher les features utilisées
-        #st.write("**Features utilisées :**")
-        #st.json(features)
+    # Utiliser les données pour afficher les résultats
+    if state["data"]:
+        proba = state["data"].get("probability")
+        prediction = state["data"].get("prediction")
+        features = state["data"].get("features")
 
-        # Récupérer le graphique SHAP
-        shap_image = get_waterfall_graph(client_id)
-        if shap_image:
-            st.image(shap_image, use_column_width=True)
+        if proba is not None:
+            proba_defaut = proba * 100  # Convertir la probabilité en pourcentage
+            score_client = 100 - proba_defaut  # Calculer le score inversé
+            seuil_valeur = thresholds[seuil_nom]["valeur"] * 100
+            seuil_score = 100 - seuil_valeur
+            distance_seuil = abs(proba_defaut - seuil_valeur)
+
+            # Affichage des résultats
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                if prediction == 0:
+                    st.success(
+                        f"**Prêt accordé 🎉**\n\n"
+                        f"Probabilité de défaut : **{proba_defaut:.2f}%**\n\n"
+                        f"Score client : **{score_client:.2f}/100**\n\n"
+                        f"Distance par rapport au seuil choisi ({seuil_score}) : **{distance_seuil:.2f}** points\n\n"
+                        f"*Le risque de défaut est faible et en dessous du seuil choisi. Ce client est éligible au crédit.*"
+                    )
+                else:
+                    st.error(
+                        f"**Prêt refusé ❌**\n\n"
+                        f"Probabilité de défaut : **{proba_defaut:.2f}%**\n\n"
+                        f"Score client : **{score_client:.2f}/100**\n\n"
+                        f"Distance par rapport au seuil choisi ({seuil_score}) : **{distance_seuil:.2f}** points\n\n"
+                        f"*Le risque de défaut est élevé et dépasse le seuil choisi. Ce client n'est pas éligible au crédit.*"
+                    )
+            with col2:
+                fig = afficher_jauge_horizontale(score_client, seuil_score, prediction)
+                st.plotly_chart(fig, use_container_width=True)
+
+
+        st.markdown("---")  # Ligne de séparation
+
+
+
+       # Afficher les features influentes
+        st.subheader("Interprétation du Score")
+        st.write("Les principales variables influençant cette décision sont illustrées ci-dessous.")
+
+
+        # Récupérer les top features
+        top_features = get_top_features(client_id)
+
+
+        if top_features:
+            # Convertir les données des top features en DataFrame
+            top_positive_df = pd.DataFrame(top_features["top_positive"])
+            top_negative_df = pd.DataFrame(top_features["top_negative"])
+
+            # Trier par SHAP Value pour garantir un ordre correct
+            top_positive_df = top_positive_df.sort_values(by="SHAP Value", ascending=True)
+            top_negative_df = top_negative_df.sort_values(by="SHAP Value", ascending=False)
+
+            # Graphiques interactifs
+            fig_positive = px.bar(
+                top_positive_df,
+                x="SHAP Value",
+                y="Feature",
+                orientation="h",
+                title="Top 10 Variables Positives",
+                labels={"SHAP Value": "", "Feature": ""},
+                color="SHAP Value",
+                color_continuous_scale="Blues"
+            )
+            # Supprimer la légende et la barre de couleur
+            fig_positive.update_coloraxes(showscale=False)
+
+            fig_negative = px.bar(
+                top_negative_df,
+                x="SHAP Value",
+                y="Feature",
+                orientation="h",
+                title="Top 10 Variables Négatives",
+                labels={"SHAP Value": "", "Feature": ""},
+                color="SHAP Value",
+                color_continuous_scale="Reds"
+            )
+            fig_negative.update_coloraxes(showscale=False)
+
+            # Afficher les graphiques côte à côte
+            col1, col2 = st.columns(2)  # Diviser l'espace en deux colonnes
+            with col1:
+                st.plotly_chart(fig_positive, use_container_width=True)
+            with col2:
+                st.plotly_chart(fig_negative, use_container_width=True)
+
+            
+        st.markdown("---")  # Ligne de séparation
+        
+        
+        
+        # Sélection des variables pour une analyse bivariée
+        st.subheader("Analyse de la distribution des variables")
+        
+        # Appeler la fonction pour récupérer dynamiquement les variables disponibles avec leurs types
+        variables_disponibles = fetch_available_variables(client_id)
+
+        # Extraire uniquement les noms des variables pour les afficher dans le multiselect
+        variable_names = [var["name"] for var in variables_disponibles]
+
+        # Sélectionner les variables pour afficher leurs distributions
+        variables_a_afficher = st.multiselect(
+            "",
+            variable_names,  # Afficher uniquement les noms des variables
+            default=[]  # Ne rien sélectionner par défaut
+        )
+
+        # Récupérer les distributions via l'API uniquement si des variables sont sélectionnées
+        if variables_a_afficher:
+            distribution_data = get_client_distribution(client_id, variables_a_afficher)
+
+            # Vérifier si des données ont été récupérées
+            if distribution_data:
+                st.write(f"Distributions pour le client ID : {distribution_data['client_id']}")
+
+                # Configurer les colonnes dynamiquement en fonction du nombre de variables sélectionnées
+                cols = st.columns(len(variables_a_afficher))
+
+                # Parcourir les variables sélectionnées
+                for i, dist in enumerate(distribution_data["distributions"]):
+                    variable = dist["variable"]
+                    variable_type = dist.get("type", "numeric")  # Par défaut, traiter comme numérique
+                    client_value = dist["client_value"]
+
+                    # Gérer les variables numériques
+                    if variable_type == "numeric":
+                        global_values = dist["global_values"]
+
+                        # Créer un histogramme interactif avec Plotly
+                        fig = px.histogram(
+                            global_values,
+                            nbins=30,
+                            title=f"Distribution de {variable}",
+                            labels={"value": variable, "count": "Fréquence"},
+                            opacity=0.75
+                        )
+
+                        # Ajouter une ligne verticale pour indiquer la position du client
+                        fig.add_vline(
+                            x=client_value,
+                            line_width=3,
+                            line_dash="dash",
+                            line_color="red",
+                            annotation_text=f"Valeur Client : {client_value:.0f}",
+                            annotation_position="top left"
+                        )
+
+                        # Configurer le graphique
+                        fig.update_layout(
+                            xaxis_title=variable,
+                            yaxis_title="Fréquence",
+                            template="plotly_white",
+                            height=400,
+                            width=400
+                        )
+
+                    # Gérer les variables catégorielles
+                    elif variable_type == "categorical":
+                        category_counts = dist["category_counts"]
+
+                        # Créer un diagramme en barres pour les variables catégorielles
+                        fig = px.bar(
+                            x=list(category_counts.keys()),
+                            y=list(category_counts.values()),
+                            title=f"Distribution de {variable}",
+                            labels={"x": "Catégories", "y": "Fréquence"},
+                            color=list(category_counts.keys())
+                        )
+
+                        # Ajouter une annotation pour la valeur du client
+                        fig.add_annotation(
+                            x=client_value,
+                            y=category_counts.get(client_value, 0),
+                            text=f"Valeur Client : {client_value}",
+                            showarrow=True,
+                            arrowhead=2,
+                            arrowcolor="red"
+                        )
+
+                        # Configurer le graphique
+                        fig.update_layout(
+                            xaxis_title="Catégories",
+                            yaxis_title="Fréquence",
+                            template="plotly_white",
+                            height=400,
+                            width=400
+                        )
+
+                    # Afficher le graphique dans la colonne correspondante
+                    with cols[i]:
+                        st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Aucune donnée de distribution disponible pour les variables sélectionnées.")
+        else:
+            st.info("Aucune variable sélectionnée. Veuillez choisir des variables pour afficher leurs distributions.")
+
+
+
+
+
+        
+                
+            
+        # Sélection des variables pour une analyse bivariée
+        st.subheader("Analyse Bivariée des Variables Numériques")
+
+        # Récupérer dynamiquement les variables disponibles avec leurs types
+        variables_disponibles = fetch_available_variables(client_id)
+
+        # Filtrer pour inclure uniquement les variables numériques
+        variables_numeriques = [
+            var["name"] for var in variables_disponibles if var["type"] == "numeric"
+        ]
+
+        # Vérifier si des variables numériques sont disponibles
+        if variables_numeriques:
+            # Sélectionner les variables X et Y pour l'analyse bivariée
+            col1, col2 = st.columns(2)
+            with col1:
+                variable_x = st.selectbox(
+                    "Choisissez la variable X :",
+                    ["Aucune"] + variables_numeriques  # Ajouter une option "Aucune"
+                )
+            with col2:
+                variable_y = st.selectbox(
+                    "Choisissez la variable Y :",
+                    ["Aucune"] + variables_numeriques  # Ajouter une option "Aucune"
+                )
+
+            # Vérifier que les deux variables X et Y ont été sélectionnées
+            if variable_x != "Aucune" and variable_y != "Aucune":
+                # Récupérer les données de distribution pour les deux variables
+                distribution_data = get_client_distribution(client_id, [variable_x, variable_y])
+
+                if distribution_data:
+                    # Récupérer les valeurs globales pour les deux variables
+                    x_values = next(
+                        dist["global_values"] for dist in distribution_data["distributions"] if dist["variable"] == variable_x
+                    )
+                    y_values = next(
+                        dist["global_values"] for dist in distribution_data["distributions"] if dist["variable"] == variable_y
+                    )
+
+                    # S'assurer que les longueurs des listes sont cohérentes
+                    min_length = min(len(x_values), len(y_values))
+                    x_values = x_values[:min_length]
+                    y_values = y_values[:min_length]
+
+                    # Ajouter un graphique de dispersion pour visualiser la relation
+                    fig = px.scatter(
+                        x=x_values,
+                        y=y_values,
+                        labels={"x": variable_x, "y": variable_y},
+                        title=f"Relation entre {variable_x} et {variable_y}",
+                        opacity=0.75
+                    )
+
+                    # Ajouter la valeur du client sur le graphique
+                    client_x = next(
+                        dist["client_value"] for dist in distribution_data["distributions"] if dist["variable"] == variable_x
+                    )
+                    client_y = next(
+                        dist["client_value"] for dist in distribution_data["distributions"] if dist["variable"] == variable_y
+                    )
+                    fig.add_scatter(
+                        x=[client_x],
+                        y=[client_y],
+                        mode="markers+text",
+                        marker=dict(color="red", size=10),
+                        text=["Valeur Client"],
+                        textposition="top center",
+                        name="Client"
+                    )
+
+                    # Configurer et afficher le graphique
+                    fig.update_layout(
+                        template="plotly_white",
+                        height=600,
+                        width=800
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.error("Impossible de récupérer les données pour l'analyse bivariée.")
+            else:
+                st.info("Veuillez sélectionner deux variables pour afficher leur relation.")
+        else:
+            st.warning("Aucune variable disponible pour l'analyse bivariée.")
+
+
+
+
+
+
+
+
+st.markdown("---")  # Ligne de séparation
+
+
+
+# Bouton pour afficher le graphique d'importance globale
+if st.button("Afficher l'Importance Globale des Features"):
+    st.warning("Veuillez noter que la génération de ce graphique peut prendre plusieurs minutes.")
+    
+    # Récupérer le graphique d'importance globale
+    global_importance_graph = get_global_feature_importance_graph()
+
+    if global_importance_graph:
+        st.image(global_importance_graph, use_column_width=True, caption="Importance Globale des Features")
+        
+    # Récupérer et afficher le graphique SHAP
+    shap_image = get_waterfall_graph(client_id)
+    if shap_image:
+        st.image(shap_image, use_column_width=True, caption="Graphique SHAP expliquant les variables influentes")
+    else:
+        st.warning("Impossible de charger le graphique SHAP.")
 
 
 
@@ -243,15 +735,6 @@ with st.sidebar:
 
 
 
-# Bouton pour afficher le graphique d'importance globale
-if st.button("Afficher l'Importance Globale des Features"):
-    st.warning("Veuillez noter que la génération de ce graphique peut prendre plusieurs minutes.")
-    
-    # Récupérer le graphique d'importance globale
-    global_importance_graph = get_global_feature_importance_graph()
-
-    if global_importance_graph:
-        st.image(global_importance_graph, use_column_width=True, caption="Importance Globale des Features")
 
 
 
