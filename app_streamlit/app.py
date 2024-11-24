@@ -6,8 +6,8 @@ import plotly.express as px  # Bibliothèque pour des graphiques interactifs
 import plotly.graph_objects as go
 
 # ---------------------------------------- Configuration de l'API ----------------------------------------
-API_URL = "http://localhost:8000"  # Remplacez par l'URL de votre API
-#API_URL = "https://fastapi-credit-scoring-c3h7f2hfd3behne7.westeurope-01.azurewebsites.net"
+#API_URL = "http://localhost:8000"  # Remplacez par l'URL de votre API
+API_URL = "https://fastapi-credit-scoring-c3h7f2hfd3behne7.westeurope-01.azurewebsites.net"
 
 # ---------------------------------------- Fonctions API ----------------------------------------
 def predict_credit(client_id, seuil_nom):
