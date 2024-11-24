@@ -276,10 +276,10 @@ if client_id != state["last_client_id"]:
 
 # Dictionnaire pour les seuils
 seuils = {
-    "Faible": "Faible risque (0.05) : On refuse le prêt dès qu'il y a 5% de probabilité que le client fasse défaut. C'est extrêmement conservateur et minimise le risque de faux négatifs, mais beaucoup de clients risquent de se voir refuser un prêt.",
-    "Modéré": "Risque modéré (0.17) : On accepte un risque modéré en refusant le prêt dès que la probabilité atteint 17%. On contrôle bien les défauts, mais on peut refuser des clients peu risqués.",
-    "Neutre": "Risque neutre (0.50) : Seuil standard où on classe les clients comme risqués si leur probabilité de défaut est supérieure à 50%.",
-    "Elevé": "Risque élevé (0.70) : On est très tolérant au risque, et on refuse le prêt seulement si la probabilité de défaut est extrêmement élevée (70%)"
+    "Faible": "Faible risque : On refuse le prêt dès que le score est inférieur à 95. C'est extrêmement conservateur et minimise le risque de faux négatifs, mais beaucoup de clients risquent de se voir refuser un prêt.",
+    "Modéré": "Risque modéré : On accepte un risque modéré en refusant le prêt dès que le score est inférieur à 83. On contrôle bien les défauts, mais on peut refuser des clients peu risqués.",
+    "Neutre": "Risque neutre : Seuil standard où on classe les clients comme risqués si leur score est inférieur à 50.",
+    "Elevé": "Risque élevé : On est très tolérant au risque, et on refuse le prêt seulement si le score est inférieur à 30"
 }
 
 # Définir les seuils
@@ -404,20 +404,13 @@ if st.button("Prédire") or state["data_received"]:
             top_positive_df = top_positive_df.sort_values(by="SHAP Value", ascending=True)
             top_negative_df = top_negative_df.sort_values(by="SHAP Value", ascending=False)
 
-            # Graphiques interactifs
-            fig_positive = px.bar(
-                top_positive_df,
-                x="SHAP Value",
-                y="Feature",
-                orientation="h",
-                title="Top 10 Variables Positives",
-                labels={"SHAP Value": "", "Feature": ""},
-                color="SHAP Value",
-                color_continuous_scale="Blues"
+            # Calculer la valeur maximale absolue des SHAP values
+            max_shap_value = max(
+                abs(top_positive_df["SHAP Value"].max()),
+                abs(top_negative_df["SHAP Value"].max())
             )
-            # Supprimer la légende et la barre de couleur
-            fig_positive.update_coloraxes(showscale=False)
 
+            # Configurer les graphiques avec la même échelle
             fig_negative = px.bar(
                 top_negative_df,
                 x="SHAP Value",
@@ -426,16 +419,57 @@ if st.button("Prédire") or state["data_received"]:
                 title="Top 10 Variables Négatives",
                 labels={"SHAP Value": "", "Feature": ""},
                 color="SHAP Value",
-                color_continuous_scale="Reds"
+                color_continuous_scale=[
+                    (0.0, "red"),  # Les valeurs proches de 0 seront blanches
+                    (1.0, "white")  # La valeur la plus négative sera rouge vif
+                ],
+                range_color=[-max_shap_value, 0]  # Spécifier la plage de l'échelle des couleurs
             )
             fig_negative.update_coloraxes(showscale=False)
+            fig_negative.update_layout(
+                xaxis=dict(range=[-max_shap_value, 0], side="top"),
+                yaxis=dict(side="left"),
+                title=dict(
+                    text="Top 10 Variables Négatives",  # Titre du graphique
+                    x=0.5,  # Position du titre au centre (0.0 = gauche, 1.0 = droite)
+                    xanchor="center",  # Ancre horizontale
+                    yanchor="top"  # Ancre verticale
+                )
+            )
+
+            fig_positive = px.bar(
+                top_positive_df,
+                x="SHAP Value",
+                y="Feature",
+                orientation="h",
+                title="Top 10 Variables Positives",
+                labels={"SHAP Value": "", "Feature": ""},
+                color="SHAP Value",
+                color_continuous_scale=[
+                    (0.0, "white"),  # Les valeurs proches de 0 seront blanches
+                    (1.0, "blue")  # La valeur la plus négative sera rouge vif
+                ],
+                range_color=[0, max_shap_value]  # Spécifier la plage de l'échelle des couleurs
+            )
+            fig_positive.update_coloraxes(showscale=False)
+            fig_positive.update_layout(
+                xaxis=dict(range=[0, max_shap_value], side="top"),
+                yaxis=dict(side="right"),
+                title=dict(
+                    text="Top 10 Variables Positives",  # Titre du graphique
+                    x=0.5,  # Position du titre au centre (0.0 = gauche, 1.0 = droite)
+                    xanchor="center",  # Ancre horizontale
+                    yanchor="top"  # Ancre verticale
+                )
+            )
 
             # Afficher les graphiques côte à côte
-            col1, col2 = st.columns(2)  # Diviser l'espace en deux colonnes
+            col1, col2 = st.columns(2)
             with col1:
-                st.plotly_chart(fig_positive, use_container_width=True)
-            with col2:
                 st.plotly_chart(fig_negative, use_container_width=True)
+            with col2:
+                st.plotly_chart(fig_positive, use_container_width=True)
+
 
             
         st.markdown("---")  # Ligne de séparation
@@ -495,7 +529,7 @@ if st.button("Prédire") or state["data_received"]:
                             line_dash="dash",
                             line_color="red",
                             annotation_text=f"Valeur Client : {client_value:.0f}",
-                            annotation_position="top left"
+                            annotation_position="top"
                         )
 
                         # Configurer le graphique
@@ -547,12 +581,7 @@ if st.button("Prédire") or state["data_received"]:
         else:
             st.info("Aucune variable sélectionnée. Veuillez choisir des variables pour afficher leurs distributions.")
 
-
-
-
-
-        
-                
+          
             
         # Sélection des variables pour une analyse bivariée
         st.subheader("Analyse Bivariée des Variables Numériques")
@@ -619,8 +648,8 @@ if st.button("Prédire") or state["data_received"]:
                         x=[client_x],
                         y=[client_y],
                         mode="markers+text",
-                        marker=dict(color="red", size=10),
-                        text=["Valeur Client"],
+                        marker=dict(color="red", size=30),
+                        text=["Client"],
                         textposition="top center",
                         name="Client"
                     )
@@ -699,13 +728,24 @@ with st.sidebar:
     
     if credit_info:
         st.write(f"**Type de contrat** : {credit_info.get('NAME_CONTRACT_TYPE', 'Non renseigné')}")
-        st.write(f"**Montant du crédit** : {credit_info.get('AMT_CREDIT', 'Non renseigné')}")
-        st.write(f"**Montant de l'annuité** : {credit_info.get('AMT_ANNUITY', 'Non renseigné')}")
-        st.write(f"**Montant des biens** : {credit_info.get('AMT_GOODS_PRICE', 'Non renseigné')}")
+        
+        # Montant du crédit
+        amt_credit = credit_info.get('AMT_CREDIT', None)
+        st.write(f"**Montant du crédit** : {f'{round(amt_credit):,} €' if amt_credit is not None else 'Non renseigné'}")
+        
+        # Montant de l'annuité
+        amt_annuity = credit_info.get('AMT_ANNUITY', None)
+        st.write(f"**Montant de l'annuité** : {f'{round(amt_annuity):,} €' if amt_annuity is not None else 'Non renseigné'}")
+        
+        # Montant des biens
+        amt_goods_price = credit_info.get('AMT_GOODS_PRICE', None)
+        st.write(f"**Montant des biens** : {f'{round(amt_goods_price):,} €' if amt_goods_price is not None else 'Non renseigné'}")
+
         
     # Ajout d'une barre de séparation
     st.markdown("---")  # Ligne de séparation
     st.subheader("Descriptions des colonnes")
+    
     
     if column_descriptions:
         # Trier les noms de colonnes par ordre alphabétique
@@ -726,12 +766,15 @@ with st.sidebar:
         st.write(f"**Description :** {column_descriptions[st.session_state.selected_column]}")
     else:
         st.write("Aucune description de colonne disponible.")
+        
     
-    if column_descriptions:
-        for column_name, description in sorted(column_descriptions.items()):
-            st.markdown(f"**{column_name}** : {description}")  # Affiche le nom de la colonne et sa description
-    else:
-        st.write("Aucune description de colonne disponible.")
+    st.markdown("---")  # Ligne de séparation
+    
+    #if column_descriptions:
+    #    for column_name, description in sorted(column_descriptions.items()):
+    #        st.markdown(f"**{column_name}** : {description}")  # Affiche le nom de la colonne et sa description
+    #else:
+    #    st.write("Aucune description de colonne disponible.")
 
 
 
